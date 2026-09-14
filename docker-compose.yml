@@ -1,0 +1,71 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: rotless
+      DB_USERNAME: rotless
+      DB_PASSWORD: rotless
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: rotless
+      POSTGRES_USER: rotless
+      POSTGRES_PASSWORD: rotless
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rotless -d rotless"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  queue:
+    build: .
+    command: ["php", "artisan", "queue:work"]
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: rotless
+      DB_USERNAME: rotless
+      DB_PASSWORD: rotless
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: rotless
+      DB_USERNAME: rotless
+      DB_PASSWORD: rotless
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
