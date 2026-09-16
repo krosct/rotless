@@ -1,6 +1,8 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      network: host
     ports:
       - "8000:8000"
     environment:
@@ -34,7 +36,9 @@ services:
       retries: 10
 
   queue:
-    build: .
+    build:
+      context: .
+      network: host
     command: ["php", "artisan", "queue:work"]
     environment:
       DB_CONNECTION: pgsql
@@ -51,7 +55,9 @@ services:
         condition: service_healthy
 
   scheduler:
-    build: .
+    build:
+      context: .
+      network: host
     command: ["php", "artisan", "schedule:work"]
     environment:
       DB_CONNECTION: pgsql
