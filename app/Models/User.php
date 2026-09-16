@@ -19,6 +19,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    /** @return BelongsToMany<Household, $this> */
     public function households(): BelongsToMany
     {
         return $this->belongsToMany(Household::class)

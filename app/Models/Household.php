@@ -12,6 +12,7 @@ final class Household extends Model
 {
     protected $fillable = ['name'];
 
+    /** @return BelongsToMany<User, $this> */
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)
@@ -19,8 +20,15 @@ final class Household extends Model
             ->withTimestamps();
     }
 
+    /** @return HasMany<Batch, $this> */
     public function batches(): HasMany
     {
         return $this->hasMany(Batch::class);
+    }
+
+    /** @return HasMany<HouseholdInvitation, $this> */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(HouseholdInvitation::class);
     }
 }

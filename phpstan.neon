@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+
+parameters:
+    paths:
+        - app/
+
+    # Level 10 is the highest level
+    level: 5
+
+    # Read Eloquent types from the casts() method (Laravel 11+ style),
+    # otherwise model attributes resolve as plain strings.
+    parseModelCastsMethod: true
