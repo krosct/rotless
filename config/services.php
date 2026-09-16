@@ -35,6 +35,8 @@ return [
 
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'expiry_warning_days' => (int) env('EXPIRY_WARNING_DAYS', 3),
+        'timeout' => (int) env('TELEGRAM_TIMEOUT', 10),
     ],
 
     'slack' => [

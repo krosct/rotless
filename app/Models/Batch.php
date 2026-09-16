@@ -37,4 +37,10 @@ final class Batch extends Model
     {
         return $query->where('status', BatchStatus::Active);
     }
+
+    public function scopeExpiringWithin(Builder $query, int $days): Builder
+    {
+        return $query->whereDate('expires_at', '>=', today())
+            ->whereDate('expires_at', '<=', today()->addDays($days));
+    }
 }
