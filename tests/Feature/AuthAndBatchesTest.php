@@ -18,9 +18,23 @@ it('registers a user and returns a token', function () {
     ]);
 
     $response->assertCreated()
-        ->assertJsonStructure(['user' => ['id', 'name', 'email'], 'token']);
+        ->assertJsonStructure(['user' => ['id', 'name', 'email', 'households'], 'token']);
 
     expect(User::where('email', 'ph@example.com')->exists())->toBeTrue();
+});
+
+it('creates a household owned by the new user on registration', function () {
+    $this->postJson('/api/v1/register', [
+        'name' => 'PH',
+        'email' => 'ph@example.com',
+        'password' => 'supersecret',
+    ])->assertCreated();
+
+    $user = User::where('email', 'ph@example.com')->first();
+
+    expect($user->households)->toHaveCount(1)
+        ->and($user->households->first()->name)->toBe("PH's pantry")
+        ->and($user->households->first()->pivot->role)->toBe('owner');
 });
 
 it('rejects registration with invalid data', function () {
@@ -50,6 +64,13 @@ it('logs in with valid credentials and rejects invalid ones', function () {
 
 it('requires authentication to list batches', function () {
     $this->getJson('/api/v1/batches')->assertStatus(401);
+});
+
+it('returns json unauthorized even without an accept header', function () {
+    $response = $this->get('/api/v1/batches');
+
+    $response->assertStatus(401);
+    expect($response->headers->get('Content-Type'))->toContain('application/json');
 });
 
 it('lists only batches from households the user belongs to', function () {
