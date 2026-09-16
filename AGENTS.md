@@ -2,7 +2,19 @@
 
 ## Guidelines
 
-- Load the PHP overlay `~/.config/opencode/docs/guidelines/php.md` (together with `base.md`) for all PHP/Laravel tasks; on conflict, the overlay wins, except where this file is more specific to this project.
+- `base.md` is auto-loaded globally via `opencode.jsonc`; do not re-load it. Additionally load, per task type:
+  - PHP/Laravel tasks: `~/.config/opencode/docs/guidelines/php.md`
+  - Container/Compose tasks: `~/.config/opencode/docs/guidelines/docker.md`
+  - Migration/query tasks: `~/.config/opencode/docs/guidelines/sql.md`
+  - `frontend/` tasks: `~/.config/opencode/docs/guidelines/typescript.md` + `react.md`
+
+## Precedence (highest first)
+
+1. Explicit user instruction in the current session.
+2. This `AGENTS.md`.
+3. Language overlay (`php.md`, `docker.md`, `sql.md`, `typescript.md`, `react.md`).
+4. `base.md`.
+5. Skills and agents docs.
 
 ## Project overview
 
@@ -29,10 +41,11 @@
 
 Modular API-first: Laravel exposes `/api/v1/*`; React is the only UI consumer.
 
-- `app/Models/` — `User`, `Household`, `Product`, `Batch`, `NotificationLog`
-- `app/Http/Controllers/Api/V1/` — versioned controllers
+- `app/Models/` — `User`, `Household`, `HouseholdInvitation`, `Product`, `Batch`, `NotificationLog`
+- `app/Http/Controllers/Api/V1/` — versioned controllers (`Auth`, `Batch`, `Invitation`, `Health`)
 - `app/Http/Requests/` — Form Requests for all validation (no inline validation)
-- `app/Policies/` — authorization (users act only inside their own household)
+- `app/Policies/` — authorization (users act only inside their own household; only owners manage members/invitations)
+- `app/Services/` — external API clients (e.g. `OpenFoodFactsClient`)
 - `app/Events/`, `app/Listeners/` — e.g. `BatchesNearExpiry` event
 - `app/Jobs/` — queued jobs, e.g. `SendTelegramExpiryAlert`
 - Routes: `routes/api.php`; scheduler: `routes/console.php` (`Schedule::daily()`)
@@ -52,6 +65,7 @@ docker compose up -d                  # start app, db, queue, scheduler
 docker compose exec app composer install
 docker compose exec app php artisan migrate --seed
 docker compose exec app vendor/bin/pint        # lint/format (fix)
+docker compose exec app vendor/bin/phpstan analyse  # static analysis (Larastan, level 5)
 docker compose exec app vendor/bin/pest --filter name  # focused test
 # Frontend
 cd frontend && npm install && npm run dev
@@ -67,12 +81,12 @@ Record exact commands here after first setup if they differ.
 - Always `===`; no loose comparisons.
 - Validation exclusively via Form Requests. Authorization via Policies (never inline checks).
 - DB access only through Eloquent/query builder (prepared statements). No raw interpolated SQL.
-- API responses: JSON resources (`app/Http/Resources/`), consistent error envelope.
+- API responses: JSON resources (`app/Http/Resources/`). Success envelope: `{"data": ...}`. Error envelope: `{"message": string, "errors"?: Record<field, string[]>}` (Laravel validation shape).
 - Frontend: functional components + hooks; TypeScript strict; keep API client in `frontend/src/api/`.
 
 ## Git
 
-- Branch per task; commit locally after each concluded task; push when PR-ready.
+- Branch per task; commit locally after each concluded task; push only when PR-ready and the user explicitly confirms.
 - Conventional commits (`feat:`, `fix:`, `chore:`, ...).
 - Never commit: `vendor/`, `node_modules/`, `.env*`, `storage/*.key`, secrets, Telegram bot token.
 
@@ -97,7 +111,7 @@ Record exact commands here after first setup if they differ.
 - Secrets (SSH key, VPS host, Telegram bot token) live only in GitHub Actions secrets and the VPS `.env` — never in the repo.
 - Health check: `GET /api/v1/health` must exist and be used by CI/deploy verification.
 - Observability: `docker compose logs` on the VPS; notification failures are visible in `notification_log` and job failed_jobs table.
-- Deployments are executed only via the `deployerlindo` subagent, and only with explicit user confirmation.
+- Deployments run only via the `deploy-project` skill, and only with explicit user confirmation.
 
 ## Observability
 
