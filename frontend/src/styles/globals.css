@@ -20,6 +20,15 @@
   }
 }
 
+/* Number input spinners: keep them readable in dark mode */
+input[type='number'] {
+  color-scheme: light;
+}
+
+.dark input[type='number'] {
+  color-scheme: dark;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
