@@ -73,7 +73,7 @@ final class HouseholdController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->string('search')->toString();
-            $query->whereHas('product', fn ($builder) => $builder->where('name', 'ilike', "%{$search}%"));
+            $query->whereHas('product', fn ($builder) => $builder->whereLike('name', "%{$search}%", caseSensitive: false));
         }
 
         $activities = $query->get()->map(function (Batch $batch) use ($user): array {
