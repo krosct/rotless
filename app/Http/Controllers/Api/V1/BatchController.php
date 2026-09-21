@@ -15,6 +15,7 @@ use App\Services\OpenFoodFactsClient;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 final class BatchController extends Controller
 {
@@ -139,7 +140,14 @@ final class BatchController extends Controller
     {
         return [
             'id' => $batch->id,
-            'product' => ['id' => $batch->product->id, 'name' => $batch->product->name],
+            'product' => [
+                'id' => $batch->product->id,
+                'name' => $batch->product->name,
+                'barcode' => $batch->product->barcode,
+                'photo_url' => $batch->product->photo_path === null
+                    ? null
+                    : Storage::disk('public')->url($batch->product->photo_path),
+            ],
             'quantity' => $batch->quantity,
             'expires_at' => $batch->expires_at->toDateString(),
             'status' => $batch->status->value,

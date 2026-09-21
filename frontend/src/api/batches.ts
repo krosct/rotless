@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { Batch, BatchStatus } from '@/types';
+import { Batch, BatchStatus, Product } from '@/types';
 
 export interface CreateBatchInput {
   household_id?: number;
@@ -80,6 +80,34 @@ export async function deleteBatch(id: number | string): Promise<{ message: strin
   return apiClient<{ message: string }>(`/api/v1/batches/${id}`, {
     method: 'DELETE',
   });
+}
+
+export interface UpdateProductInput {
+  name?: string;
+  photo?: File | null;
+}
+
+export async function updateProduct(
+  productId: number | string,
+  input: UpdateProductInput
+): Promise<Product> {
+  const formData = new FormData();
+
+  if (input.name) {
+    formData.append('name', input.name.trim());
+  }
+  if (input.photo) {
+    formData.append('photo', input.photo);
+  }
+
+  const payload = await apiClient<Product | DataEnvelope<Product>>(
+    `/api/v1/products/${productId}`,
+    {
+      method: 'PATCH',
+      body: formData,
+    }
+  );
+  return unwrap(payload);
 }
 
 export async function lookupBarcode(barcode: string): Promise<{ name: string | null; photo_url?: string | null; barcode: string }> {

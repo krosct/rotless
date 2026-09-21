@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useBatches, useCreateBatch, useUpdateBatch, useDeleteBatch } from '@/hooks/useBatches';
-import { Batch, BatchStatus } from '@/types';
+import {
+  useBatches,
+  useCreateBatch,
+  useUpdateBatch,
+  useDeleteBatch,
+  useUpdateProduct,
+} from '@/hooks/useBatches';
+import { BatchStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { BatchList } from '@/components/batches/BatchList';
 import { BatchForm } from '@/components/batches/BatchForm';
 import { ConsumeBatchModal, ConsumeAction } from '@/components/batches/ConsumeBatchModal';
+import { ProductEditModal } from '@/components/batches/ProductEditModal';
 import { Modal } from '@/components/ui/Modal';
 import { ProductGroup } from '@/utils/groupBatches';
 import { Bell, AlertTriangle, Sparkles } from 'lucide-react';
@@ -18,10 +25,11 @@ export function Dashboard() {
   const createMutation = useCreateBatch();
   const updateMutation = useUpdateBatch();
   const deleteMutation = useDeleteBatch();
+  const updateProductMutation = useUpdateProduct();
 
   // Modal states
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
-  const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
+  const [editingGroup, setEditingGroup] = useState<ProductGroup | null>(null);
   const [consumeTarget, setConsumeTarget] = useState<{
     group: ProductGroup;
     action: ConsumeAction;
@@ -50,23 +58,6 @@ export function Dashboard() {
     setIsNewModalOpen(false);
   };
 
-  const handleEditSubmit = async (formData: {
-    quantity: number;
-    expires_at: string;
-    status?: BatchStatus;
-  }) => {
-    if (!editingBatch) return;
-    await updateMutation.mutateAsync({
-      id: editingBatch.id,
-      input: {
-        quantity: formData.quantity,
-        expires_at: formData.expires_at,
-        status: formData.status,
-      },
-    });
-    setEditingBatch(null);
-  };
-
   const handleConsumeRequest = (group: ProductGroup, action: ConsumeAction) => {
     setConsumeTarget({ group, action });
   };
@@ -87,6 +78,37 @@ export function Dashboard() {
     });
 
     setConsumeTarget(null);
+  };
+
+  const handleSaveProduct = async (input: { name: string; photo: File | null }) => {
+    if (!editingGroup) return;
+    await updateProductMutation.mutateAsync({
+      id: editingGroup.productId,
+      input,
+    });
+  };
+
+  const handleSaveEntry = async (
+    batchId: number,
+    input: { quantity: number; expires_at: string; status: BatchStatus }
+  ) => {
+    await updateMutation.mutateAsync({ id: batchId, input });
+  };
+
+  const handleConsumeAll = async (action: ConsumeAction) => {
+    if (!editingGroup) return;
+
+    const activeEntries = editingGroup.entries.filter(
+      (entry) => entry.batch.status === 'active'
+    );
+
+    await Promise.all(
+      activeEntries.map((entry) =>
+        updateMutation.mutateAsync({ id: entry.batch.id, input: { status: action } })
+      )
+    );
+
+    setEditingGroup(null);
   };
 
   const handleDeleteBatch = (id: number) => {
@@ -150,7 +172,7 @@ export function Dashboard() {
           batches={batches}
           isLoading={isLoading}
           onAddNew={handleOpenNewModal}
-          onEditBatch={(batch) => setEditingBatch(batch)}
+          onEditGroup={(group) => setEditingGroup(group)}
           onConsume={handleConsumeRequest}
           onDeleteBatch={handleDeleteBatch}
         />
@@ -172,24 +194,16 @@ export function Dashboard() {
         />
       </Modal>
 
-      {/* Edit Batch Modal */}
-      <Modal
-        isOpen={!!editingBatch}
-        onClose={() => setEditingBatch(null)}
-        title="Editar Lote"
-        description={`Atualize quantidade, validade ou status de "${editingBatch?.product.name}".`}
-        maxWidth="md"
-      >
-        {editingBatch && (
-          <BatchForm
-            initialBatch={editingBatch}
-            householdId={currentHousehold?.id}
-            onSubmit={handleEditSubmit}
-            onCancel={() => setEditingBatch(null)}
-            isLoading={updateMutation.isPending}
-          />
-        )}
-      </Modal>
+      {/* Product Edit Modal */}
+      <ProductEditModal
+        isOpen={!!editingGroup}
+        group={editingGroup}
+        isLoading={updateMutation.isPending || updateProductMutation.isPending}
+        onClose={() => setEditingGroup(null)}
+        onSaveProduct={handleSaveProduct}
+        onSaveEntry={handleSaveEntry}
+        onConsumeAll={handleConsumeAll}
+      />
 
       {/* Consume / Discard Confirmation Modal */}
       <ConsumeBatchModal

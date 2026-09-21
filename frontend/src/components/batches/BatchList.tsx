@@ -17,7 +17,7 @@ export interface BatchListProps {
   batches: Batch[];
   isLoading?: boolean;
   onAddNew: () => void;
-  onEditBatch: (batch: Batch) => void;
+  onEditGroup: (group: ProductGroup) => void;
   onConsume: (group: ProductGroup, action: 'consumed' | 'discarded') => void;
   onDeleteBatch: (id: number) => void;
 }
@@ -46,7 +46,7 @@ export function BatchList({
   batches,
   isLoading,
   onAddNew,
-  onEditBatch,
+  onEditGroup,
   onConsume,
   onDeleteBatch,
 }: BatchListProps) {
@@ -221,10 +221,7 @@ export function BatchList({
             <ProductGroupCard
               key={group.productId}
               group={group}
-              onEdit={(batchId) => {
-                const entry = group.entries.find((item) => item.batch.id === batchId);
-                if (entry) onEditBatch(entry.batch);
-              }}
+              onEdit={() => onEditGroup(group)}
               onConsume={onConsume}
               onDelete={onDeleteBatch}
             />

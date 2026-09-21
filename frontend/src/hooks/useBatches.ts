@@ -51,6 +51,22 @@ export function useUpdateBatch() {
   });
 }
 
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number | string; input: batchesApi.UpdateProductInput }) =>
+      batchesApi.updateProduct(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BATCHES_QUERY_KEY });
+      toast.success('Produto atualizado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao atualizar produto.');
+    },
+  });
+}
+
 export function useDeleteBatch() {
   const queryClient = useQueryClient();
 

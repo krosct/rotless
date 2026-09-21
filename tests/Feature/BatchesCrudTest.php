@@ -155,6 +155,37 @@ it('records who created and who last updated a batch', function () {
         ->and($batch->created_at)->not->toBeNull();
 });
 
+it('updates a product name and photo for household members only', function () {
+    [$user, $household] = memberHousehold();
+    $outsider = User::factory()->create();
+    Storage::fake('public');
+
+    $product = Product::create(['name' => 'Old name']);
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(10)->toDateString(),
+        'status' => BatchStatus::Active,
+    ]);
+
+    $this->actingAs($outsider, 'sanctum')->patchJson("/api/v1/products/{$product->id}", [
+        'name' => 'Hacked',
+    ])->assertForbidden();
+
+    $response = $this->actingAs($user, 'sanctum')->patch("/api/v1/products/{$product->id}", [
+        'name' => 'New name',
+        'photo' => UploadedFile::fake()->image('product.jpg'),
+    ]);
+
+    $response->assertOk()->assertJsonPath('data.name', 'New name');
+
+    $product->refresh();
+    expect($product->name)->toBe('New name')
+        ->and($product->photo_path)->not->toBeNull();
+    Storage::disk('public')->assertExists($product->photo_path);
+});
+
 it('shows, updates and deletes a batch with policy checks', function () {
     [$user, $household] = memberHousehold();
     $outsider = User::factory()->create();
