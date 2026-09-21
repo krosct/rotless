@@ -147,7 +147,11 @@ export function Dashboard() {
               Olá, {user?.name.split(' ')[0]}!
             </h1>
             <p className="text-base sm:text-lg text-stone-500 dark:text-stone-400 mt-0.5">
-              Você está em {currentHousehold?.name || 'sua despensa'}.
+              Você está em{' '}
+              <strong className="font-bold text-stone-800 dark:text-stone-200">
+                {currentHousehold?.name || 'sua despensa'}
+              </strong>
+              .
             </p>
           </div>
 
