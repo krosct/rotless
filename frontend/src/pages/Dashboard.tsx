@@ -144,10 +144,10 @@ export function Dashboard() {
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-              Despensa Inteligente
+              Olá, {user?.name.split(' ')[0]}!
             </h1>
-            <p className="text-sm text-stone-500 dark:text-stone-400 mt-0.5">
-              {currentHousehold?.name || 'Sua despensa'} &bull; Olá, {user?.name.split(' ')[0]}!
+            <p className="text-base sm:text-lg text-stone-500 dark:text-stone-400 mt-0.5">
+              Você está em {currentHousehold?.name || 'sua despensa'}.
             </p>
           </div>
 
