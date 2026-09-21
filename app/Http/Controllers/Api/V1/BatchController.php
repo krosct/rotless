@@ -23,7 +23,7 @@ final class BatchController extends Controller
     public function index(Request $request): JsonResponse
     {
         $batches = Batch::query()
-            ->with('product')
+            ->with(['product', 'creator', 'updater'])
             ->whereHas('household', fn ($query) => $query->whereHas('users', fn ($users) => $users->whereKey($request->user()->id)))
             ->orderBy('expires_at')
             ->get();
@@ -50,25 +50,30 @@ final class BatchController extends Controller
             'quantity' => $request->integer('quantity', 1),
             'expires_at' => $request->date('expires_at'),
             'status' => BatchStatus::Active,
+            'created_by' => $request->user()->id,
+            'updated_by' => $request->user()->id,
         ]);
 
-        return response()->json(['data' => $this->serialize($batch->load('product'))], 201);
+        return response()->json(['data' => $this->serialize($batch->load(['product', 'creator', 'updater']))], 201);
     }
 
     public function show(Batch $batch): JsonResponse
     {
         $this->authorize('view', $batch);
 
-        return response()->json(['data' => $this->serialize($batch->load('product'))]);
+        return response()->json(['data' => $this->serialize($batch->load(['product', 'creator', 'updater']))]);
     }
 
     public function update(UpdateBatchRequest $request, Batch $batch): JsonResponse
     {
         $this->authorize('update', $batch);
 
-        $batch->update($request->only(['quantity', 'expires_at', 'status']));
+        $batch->update([
+            ...$request->only(['quantity', 'expires_at', 'status']),
+            'updated_by' => $request->user()->id,
+        ]);
 
-        return response()->json(['data' => $this->serialize($batch->fresh('product'))]);
+        return response()->json(['data' => $this->serialize($batch->fresh(['product', 'creator', 'updater']))]);
     }
 
     public function destroy(Batch $batch): JsonResponse
@@ -78,6 +83,25 @@ final class BatchController extends Controller
         $batch->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function lookupBarcode(Request $request, string $barcode): JsonResponse
+    {
+        $data = OpenFoodFactsClient::fromConfig()->findByBarcode($barcode);
+
+        if ($data === null) {
+            return response()->json([
+                'name' => null,
+                'photo_url' => null,
+                'barcode' => $barcode,
+            ]);
+        }
+
+        return response()->json([
+            'name' => $data['product_name'] ?? $barcode,
+            'photo_url' => $data['image_url'] ?? null,
+            'barcode' => $barcode,
+        ]);
     }
 
     private function resolveProduct(StoreBatchRequest $request): ?Product
@@ -119,6 +143,16 @@ final class BatchController extends Controller
             'quantity' => $batch->quantity,
             'expires_at' => $batch->expires_at->toDateString(),
             'status' => $batch->status->value,
+            'created_at' => $batch->created_at?->toIso8601String(),
+            'updated_at' => $batch->updated_at?->toIso8601String(),
+            'created_by' => $batch->creator === null ? null : [
+                'id' => $batch->creator->id,
+                'name' => $batch->creator->name,
+            ],
+            'updated_by' => $batch->updater === null ? null : [
+                'id' => $batch->updater->id,
+                'name' => $batch->updater->name,
+            ],
         ];
     }
 }

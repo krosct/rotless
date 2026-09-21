@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class Batch extends Model
 {
-    protected $fillable = ['household_id', 'product_id', 'quantity', 'expires_at', 'status'];
+    protected $fillable = ['household_id', 'product_id', 'quantity', 'expires_at', 'status', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
@@ -31,6 +31,18 @@ final class Batch extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     public function scopeActive(Builder $query): Builder

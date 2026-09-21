@@ -124,6 +124,37 @@ it('forbids creating batches in other households', function () {
     ])->assertForbidden();
 });
 
+it('records who created and who last updated a batch', function () {
+    [$creator, $household] = memberHousehold();
+    $editor = User::factory()->create();
+    $household->users()->attach($editor->id, ['role' => HouseholdRole::Member->value]);
+
+    $created = $this->actingAs($creator, 'sanctum')->postJson('/api/v1/batches', [
+        'household_id' => $household->id,
+        'name' => 'Coffee',
+        'quantity' => 2,
+        'expires_at' => now()->addDays(20)->toDateString(),
+    ]);
+
+    $created->assertCreated()
+        ->assertJsonPath('data.created_by.id', $creator->id)
+        ->assertJsonPath('data.created_by.name', $creator->name)
+        ->assertJsonPath('data.updated_by.id', $creator->id);
+
+    $batchId = $created->json('data.id');
+
+    $this->actingAs($editor, 'sanctum')->patchJson("/api/v1/batches/{$batchId}", [
+        'quantity' => 1,
+    ])->assertOk()
+        ->assertJsonPath('data.created_by.id', $creator->id)
+        ->assertJsonPath('data.updated_by.id', $editor->id);
+
+    $batch = Batch::find($batchId);
+    expect($batch->created_by)->toBe($creator->id)
+        ->and($batch->updated_by)->toBe($editor->id)
+        ->and($batch->created_at)->not->toBeNull();
+});
+
 it('shows, updates and deletes a batch with policy checks', function () {
     [$user, $household] = memberHousehold();
     $outsider = User::factory()->create();
