@@ -1,62 +1,89 @@
-import { z } from 'zod';
-import { apiFetch } from './client';
-
-const productSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-});
-
-const batchSchema = z.object({
-  id: z.number(),
-  product: productSchema,
-  quantity: z.number(),
-  expires_at: z.string(),
-  status: z.enum(['active', 'consumed', 'discarded']),
-});
-
-export type Batch = z.infer<typeof batchSchema>;
-
-const batchListSchema = z.object({
-  data: z.array(batchSchema),
-});
-
-export async function listBatches(): Promise<Batch[]> {
-  const data = await apiFetch<unknown>('/api/v1/batches');
-  return batchListSchema.parse(data).data;
-}
+import { apiClient } from './client';
+import { Batch, BatchStatus } from '@/types';
 
 export interface CreateBatchInput {
-  household_id: number;
-  product_id?: number;
+  household_id?: number;
   barcode?: string;
   name?: string;
   quantity: number;
   expires_at: string;
-  photo?: File;
+  photo?: File | null;
 }
 
-const createBatchResponseSchema = z.object({
-  data: batchSchema,
-});
+export interface UpdateBatchInput {
+  quantity?: number;
+  expires_at?: string;
+  status?: BatchStatus;
+}
+
+interface DataEnvelope<T> {
+  data: T;
+}
+
+function unwrap<T>(payload: T | DataEnvelope<T>): T {
+  if (payload !== null && typeof payload === 'object' && 'data' in payload) {
+    return (payload as DataEnvelope<T>).data;
+  }
+  return payload as T;
+}
+
+export async function listBatches(householdId?: number): Promise<Batch[]> {
+  const query = householdId ? `?household_id=${householdId}` : '';
+  const payload = await apiClient<Batch[] | DataEnvelope<Batch[]>>(`/api/v1/batches${query}`, {
+    method: 'GET',
+  });
+  return unwrap(payload);
+}
+
+export async function getBatch(id: number | string): Promise<Batch> {
+  const payload = await apiClient<Batch | DataEnvelope<Batch>>(`/api/v1/batches/${id}`, {
+    method: 'GET',
+  });
+  return unwrap(payload);
+}
 
 export async function createBatch(input: CreateBatchInput): Promise<Batch> {
   const formData = new FormData();
-  formData.append('household_id', String(input.household_id));
-  if (input.product_id !== undefined) {
-    formData.append('product_id', String(input.product_id));
+
+  if (input.household_id) {
+    formData.append('household_id', String(input.household_id));
   }
-  if (input.barcode !== undefined) {
-    formData.append('barcode', input.barcode);
+  if (input.barcode) {
+    formData.append('barcode', input.barcode.trim());
   }
-  if (input.name !== undefined) {
-    formData.append('name', input.name);
+  if (input.name) {
+    formData.append('name', input.name.trim());
   }
-  formData.append('quantity', String(input.quantity));
+  formData.append('quantity', String(Math.floor(input.quantity)));
   formData.append('expires_at', input.expires_at);
-  if (input.photo !== undefined) {
+
+  if (input.photo) {
     formData.append('photo', input.photo);
   }
 
-  const data = await apiFetch<unknown>('/api/v1/batches', { method: 'POST', body: formData });
-  return createBatchResponseSchema.parse(data).data;
+  const payload = await apiClient<Batch | DataEnvelope<Batch>>('/api/v1/batches', {
+    method: 'POST',
+    body: formData,
+  });
+  return unwrap(payload);
+}
+
+export async function updateBatch(id: number | string, input: UpdateBatchInput): Promise<Batch> {
+  const payload = await apiClient<Batch | DataEnvelope<Batch>>(`/api/v1/batches/${id}`, {
+    method: 'PATCH',
+    body: input,
+  });
+  return unwrap(payload);
+}
+
+export async function deleteBatch(id: number | string): Promise<{ message: string }> {
+  return apiClient<{ message: string }>(`/api/v1/batches/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function lookupBarcode(barcode: string): Promise<{ name: string | null; photo_url?: string | null; barcode: string }> {
+  return apiClient<{ name: string | null; photo_url?: string | null; barcode: string }>(`/api/v1/openfoodfacts/${encodeURIComponent(barcode)}`, {
+    method: 'GET',
+  });
 }
