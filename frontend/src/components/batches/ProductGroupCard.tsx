@@ -22,7 +22,7 @@ export interface ProductGroupCardProps {
 
 export function ProductGroupCard({ group, onEdit, onConsume, onDelete }: ProductGroupCardProps) {
   const expiry = getExpiryMeta(group.earliestExpiresAt);
-  const hasActive = group.entries.some((entry) => entry.batch.status === 'active');
+  const hasActive = group.entries.length > 0;
 
   return (
     <div
@@ -93,6 +93,11 @@ export function ProductGroupCard({ group, onEdit, onConsume, onDelete }: Product
         <div className="flex flex-col gap-1.5 mb-4">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Entradas ({group.entries.length})
+            {group.resolvedCount > 0 && (
+              <span className="ml-1 normal-case font-normal text-stone-400 dark:text-stone-500">
+                &bull; {group.resolvedCount} resolvida(s)
+              </span>
+            )}
           </span>
 
           <div

@@ -50,6 +50,7 @@ function makeGroup(): ProductGroup {
     totalQuantity: 7,
     earliestExpiresAt: '2026-10-01',
     status: 'active',
+    resolvedCount: 0,
   };
 }
 

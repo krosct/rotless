@@ -25,17 +25,14 @@ export interface BatchListProps {
 type FilterStatus = 'all' | 'active' | 'soon' | 'overdue' | 'consumed';
 
 function groupMatchesFilter(group: ProductGroup, filter: FilterStatus): boolean {
-  const activeEntries = group.entries.filter((entry) => entry.batch.status === 'active');
-
   if (filter === 'all') return true;
-  if (filter === 'consumed') return activeEntries.length === 0;
+  if (filter === 'consumed') return group.entries.length === 0;
 
-  if (activeEntries.length === 0) return false;
+  if (group.entries.length === 0) return false;
 
   if (filter === 'active') return true;
 
-  const earliestActive = activeEntries[0].expires_at;
-  const tone = expiryTone(earliestActive);
+  const tone = expiryTone(group.entries[0].expires_at);
   if (filter === 'soon') return tone === 'soon';
   if (filter === 'overdue') return tone === 'overdue';
 
@@ -62,15 +59,13 @@ export function BatchList({
     let consumed = 0;
 
     groups.forEach((group) => {
-      const activeEntries = group.entries.filter((entry) => entry.batch.status === 'active');
-
-      if (activeEntries.length === 0) {
+      if (group.entries.length === 0) {
         consumed++;
         return;
       }
 
       active++;
-      const tone = expiryTone(activeEntries[0].expires_at);
+      const tone = expiryTone(group.entries[0].expires_at);
       if (tone === 'soon') soon++;
       if (tone === 'overdue') overdue++;
     });

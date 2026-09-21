@@ -63,6 +63,19 @@ describe('groupBatchesByProduct', () => {
     expect(groups[0].earliestExpiresAt).toBe('2026-11-01');
   });
 
+  it('remove entradas resolvidas da lista e conta em resolvedCount', () => {
+    const batches = [
+      makeBatch({ id: 1, productId: 10, status: 'consumed', expires_at: '2026-10-01' }),
+      makeBatch({ id: 2, productId: 10, status: 'active', expires_at: '2026-11-01' }),
+    ];
+
+    const groups = groupBatchesByProduct(batches);
+
+    expect(groups[0].entries).toHaveLength(1);
+    expect(groups[0].entries[0].batch.id).toBe(2);
+    expect(groups[0].resolvedCount).toBe(1);
+  });
+
   it('marca o grupo como consumido quando todas as entradas foram resolvidas', () => {
     const batches = [
       makeBatch({ id: 1, productId: 10, status: 'consumed', expires_at: '2026-10-01' }),
@@ -73,5 +86,7 @@ describe('groupBatchesByProduct', () => {
 
     expect(groups[0].status).toBe('consumed');
     expect(groups[0].totalQuantity).toBe(0);
+    expect(groups[0].entries).toHaveLength(0);
+    expect(groups[0].resolvedCount).toBe(2);
   });
 });
