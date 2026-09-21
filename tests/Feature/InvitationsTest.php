@@ -27,7 +27,7 @@ it('lets an owner invite a user by email', function () {
     expect(HouseholdInvitation::where('email', 'guest@example.com')->exists())->toBeTrue();
 });
 
-it('forbids non-owners from inviting', function () {
+it('forbids members and outsiders from inviting', function () {
     $member = User::factory()->create();
     $outsider = User::factory()->create();
     $household = Household::create(['name' => 'Home']);
@@ -42,6 +42,19 @@ it('forbids non-owners from inviting', function () {
         "/api/v1/households/{$household->id}/invitations",
         ['email' => 'guest@example.com']
     )->assertForbidden();
+});
+
+it('lets a manager invite a user by email', function () {
+    $manager = User::factory()->create();
+    $household = Household::create(['name' => 'Home']);
+    $household->users()->attach($manager->id, ['role' => HouseholdRole::Manager->value]);
+
+    $this->actingAs($manager, 'sanctum')->postJson(
+        "/api/v1/households/{$household->id}/invitations",
+        ['email' => 'guest@example.com']
+    )->assertCreated();
+
+    expect(HouseholdInvitation::where('email', 'guest@example.com')->exists())->toBeTrue();
 });
 
 it('rejects inviting someone who is already a member', function () {

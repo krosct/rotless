@@ -1,34 +1,43 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HouseholdMember } from '@/types';
+import { HouseholdMember, HouseholdRole } from '@/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { InviteModal } from './InviteModal';
-import { removeMember } from '@/api/households';
+import { removeMember, updateMemberRole } from '@/api/households';
 import { formatDate } from '@/utils/format';
-import { UserPlus, Users, Crown, Shield, Activity, Trash2 } from 'lucide-react';
+import { UserPlus, Users, Crown, Shield, Activity, Trash2, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface MemberListProps {
   householdId: number;
   householdName: string;
   members: HouseholdMember[];
-  isOwner: boolean;
+  canManageMembers: boolean;
+  canRemoveMembers: boolean;
   onRefresh?: () => void;
 }
+
+const roleLabels: Record<HouseholdRole, string> = {
+  owner: 'Proprietário',
+  manager: 'Gerente',
+  member: 'Membro',
+};
 
 export function MemberList({
   householdId,
   householdName,
   members,
-  isOwner,
+  canManageMembers,
+  canRemoveMembers,
   onRefresh,
 }: MemberListProps) {
   const navigate = useNavigate();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
 
   const handleConfirmRemove = async () => {
     if (!memberToRemove) return;
@@ -47,6 +56,20 @@ export function MemberList({
     }
   };
 
+  const handleRoleChange = async (member: HouseholdMember, role: 'manager' | 'member') => {
+    setUpdatingRoleId(member.id);
+    try {
+      await updateMemberRole(householdId, member.id, role);
+      toast.success(`${member.name} agora é ${roleLabels[role].toLowerCase()}.`);
+      if (onRefresh) onRefresh();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao atualizar o papel do membro.';
+      toast.error(msg);
+    } finally {
+      setUpdatingRoleId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 text-left">
       <div className="flex items-center justify-between">
@@ -58,7 +81,7 @@ export function MemberList({
           <span className="text-xs text-stone-500">({members.length})</span>
         </div>
 
-        {isOwner && (
+        {canManageMembers && (
           <Button
             size="sm"
             variant="outline"
@@ -102,7 +125,7 @@ export function MemberList({
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {isOwner && (
+                {canManageMembers && (
                   <button
                     type="button"
                     onClick={() =>
@@ -116,31 +139,50 @@ export function MemberList({
                   </button>
                 )}
 
-                <Badge variant={isMemberOwner ? 'owner' : 'member'} size="sm">
+                <Badge variant={member.role} size="sm">
                   {isMemberOwner ? (
                     <>
                       <Crown className="w-3 h-3 text-amber-500" />
-                      Proprietário
+                      {roleLabels.owner}
+                    </>
+                  ) : member.role === 'manager' ? (
+                    <>
+                      <UserCog className="w-3 h-3 text-sky-500" />
+                      {roleLabels.manager}
                     </>
                   ) : (
                     <>
                       <Shield className="w-3 h-3 text-stone-400" />
-                      Membro
+                      {roleLabels.member}
                     </>
                   )}
                 </Badge>
 
-                {isOwner && !isMemberOwner && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMemberToRemove(member)}
-                    title="Remover membro"
-                    className="h-8 px-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="sr-only">Remover</span>
-                  </Button>
+                {canRemoveMembers && !isMemberOwner && (
+                  <>
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleRoleChange(member, e.target.value as 'manager' | 'member')}
+                      disabled={updatingRoleId === member.id}
+                      title="Alterar papel do membro"
+                      aria-label={`Papel de ${member.name}`}
+                      className="h-8 px-2 text-xs rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f] disabled:opacity-50"
+                    >
+                      <option value="member">Membro</option>
+                      <option value="manager">Gerente</option>
+                    </select>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMemberToRemove(member)}
+                      title="Remover membro"
+                      className="h-8 px-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="sr-only">Remover</span>
+                    </Button>
+                  </>
                 )}
               </div>
             </div>

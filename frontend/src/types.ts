@@ -25,11 +25,13 @@ export interface Batch {
   updated_by?: BatchActor | null;
 }
 
+export type HouseholdRole = 'owner' | 'manager' | 'member';
+
 export interface HouseholdMember {
   id: number;
   name: string;
   email: string;
-  role: 'owner' | 'member';
+  role: HouseholdRole;
   joined_at?: string;
   operations_count?: number;
 }
@@ -56,7 +58,7 @@ export interface Household {
   id: number;
   name: string;
   is_owner?: boolean;
-  role?: 'owner' | 'member';
+  role?: HouseholdRole;
   members?: HouseholdMember[];
 }
 

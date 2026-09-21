@@ -16,6 +16,7 @@ export function HouseholdSettings() {
     user?.households?.find((item) => item.id === Number(householdId)) ?? null;
 
   const isOwner = household?.role === 'owner' || household?.is_owner === true;
+  const canManageMembers = isOwner || household?.role === 'manager';
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950 transition-colors">
@@ -40,12 +41,12 @@ export function HouseholdSettings() {
               </p>
             </CardContent>
           </Card>
-        ) : !isOwner ? (
+        ) : !canManageMembers ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <ShieldAlert className="w-8 h-8 text-stone-400 mb-3" />
               <p className="text-sm text-stone-500 dark:text-stone-400">
-                Apenas o proprietário pode gerenciar as configurações desta despensa.
+                Apenas o proprietário ou um gerente pode gerenciar esta despensa.
               </p>
             </CardContent>
           </Card>
@@ -69,7 +70,7 @@ export function HouseholdSettings() {
                     <CardDescription>
                       Você é{' '}
                       <strong className="text-stone-800 dark:text-stone-200">
-                        Proprietário (Owner)
+                        {isOwner ? 'Proprietário (Owner)' : 'Gerente (Manager)'}
                       </strong>{' '}
                       desta despensa.
                     </CardDescription>
@@ -82,7 +83,8 @@ export function HouseholdSettings() {
                   householdId={household.id}
                   householdName={household.name}
                   members={household.members || []}
-                  isOwner={isOwner}
+                  canManageMembers={canManageMembers}
+                  canRemoveMembers={isOwner}
                   onRefresh={refreshMe}
                 />
               </CardContent>

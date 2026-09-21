@@ -58,3 +58,17 @@ export async function removeMember(householdId: number, userId: number): Promise
     method: 'DELETE',
   });
 }
+
+export async function updateMemberRole(
+  householdId: number,
+  userId: number,
+  role: 'manager' | 'member'
+): Promise<{ message: string; member: { id: number; role: string } }> {
+  return apiClient<{ message: string; member: { id: number; role: string } }>(
+    `/api/v1/households/${householdId}/members/${userId}/role`,
+    {
+      method: 'PATCH',
+      body: { role },
+    }
+  );
+}

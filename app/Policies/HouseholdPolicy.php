@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
-use App\Enums\HouseholdRole;
 use App\Models\Household;
 use App\Models\User;
 
@@ -12,19 +11,18 @@ final class HouseholdPolicy
 {
     public function view(User $user, Household $household): bool
     {
-        return $this->isMember($user, $household);
+        return $household->roleOf($user) !== null;
     }
 
+    /** Owner and manager may invite members and view activities. */
     public function manageMembers(User $user, Household $household): bool
     {
-        return $household->users()
-            ->whereKey($user->id)
-            ->wherePivot('role', HouseholdRole::Owner->value)
-            ->exists();
+        return $household->roleOf($user)?->canManageMembers() ?? false;
     }
 
-    private function isMember(User $user, Household $household): bool
+    /** Only the owner may remove members or change their roles. */
+    public function removeMembers(User $user, Household $household): bool
     {
-        return $household->users()->whereKey($user->id)->exists();
+        return $household->roleOf($user)?->canRemoveMembers() ?? false;
     }
 }

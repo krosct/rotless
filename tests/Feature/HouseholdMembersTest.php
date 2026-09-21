@@ -21,6 +21,73 @@ function householdWithMembers(): array
     return [$owner, $member, $household];
 }
 
+it('lets a manager view activities but not remove members or change roles', function () {
+    [$owner, $member, $household] = householdWithMembers();
+    $manager = User::factory()->create(['name' => 'Manager']);
+    $household->users()->attach($manager->id, ['role' => HouseholdRole::Manager->value]);
+
+    $product = Product::create(['name' => 'Rice']);
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+        'created_by' => $member->id,
+        'updated_by' => $member->id,
+    ]);
+
+    // Manager can see the operations report.
+    $this->actingAs($manager, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/activities")
+        ->assertOk();
+
+    // Manager cannot remove members.
+    $this->actingAs($manager, 'sanctum')
+        ->deleteJson("/api/v1/households/{$household->id}/members/{$member->id}")
+        ->assertForbidden();
+
+    // Manager cannot change roles.
+    $this->actingAs($manager, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}/members/{$member->id}/role", [
+            'role' => 'manager',
+        ])
+        ->assertForbidden();
+});
+
+it('lets the owner promote and demote a member', function () {
+    [$owner, $member, $household] = householdWithMembers();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}/members/{$member->id}/role", [
+            'role' => 'manager',
+        ])
+        ->assertOk()
+        ->assertJsonPath('member.role', 'manager');
+
+    expect($household->roleOf($member))->toBe(HouseholdRole::Manager);
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}/members/{$member->id}/role", [
+            'role' => 'member',
+        ])
+        ->assertOk();
+
+    expect($household->roleOf($member))->toBe(HouseholdRole::Member);
+});
+
+it('never lets the owner role be changed', function () {
+    [$owner, $member, $household] = householdWithMembers();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}/members/{$owner->id}/role", [
+            'role' => 'member',
+        ])
+        ->assertStatus(422);
+
+    expect($household->roleOf($owner))->toBe(HouseholdRole::Owner);
+});
+
 it('lists members with joined date and operations count', function () {
     [$owner, $member, $household] = householdWithMembers();
     $product = Product::create(['name' => 'Rice']);

@@ -30,5 +30,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/v1/households/{household}/activities', [HouseholdController::class, 'activities']);
     Route::get('/v1/households/{household}/actors', [HouseholdController::class, 'actors']);
     Route::delete('/v1/households/{household}/members/{user}', [HouseholdController::class, 'removeMember']);
+    Route::patch('/v1/households/{household}/members/{user}/role', [HouseholdController::class, 'updateMemberRole']);
     Route::post('/v1/invitations/accept', [InvitationController::class, 'accept']);
 });

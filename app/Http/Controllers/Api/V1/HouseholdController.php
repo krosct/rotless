@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 final class HouseholdController extends Controller
 {
@@ -135,20 +136,38 @@ final class HouseholdController extends Controller
 
     public function removeMember(Request $request, Household $household, User $user): JsonResponse
     {
-        $this->authorize('manageMembers', $household);
+        $this->authorize('removeMembers', $household);
 
-        $isOwner = $household->users()
-            ->whereKey($user->id)
-            ->wherePivot('role', HouseholdRole::Owner->value)
-            ->exists();
-
-        if ($isOwner) {
+        if ($household->roleOf($user) === HouseholdRole::Owner) {
             return response()->json(['message' => 'The owner cannot be removed.'], 422);
         }
 
         $household->users()->detach($user->id);
 
         return response()->json(['message' => 'Member removed.']);
+    }
+
+    public function updateMemberRole(Request $request, Household $household, User $user): JsonResponse
+    {
+        $this->authorize('removeMembers', $household);
+
+        $validated = $request->validate([
+            'role' => ['required', Rule::in([HouseholdRole::Manager->value, HouseholdRole::Member->value])],
+        ]);
+
+        if ($household->roleOf($user) === HouseholdRole::Owner) {
+            return response()->json(['message' => 'The owner role cannot be changed.'], 422);
+        }
+
+        $household->users()->updateExistingPivot($user->id, ['role' => $validated['role']]);
+
+        return response()->json([
+            'message' => 'Member role updated.',
+            'member' => [
+                'id' => $user->id,
+                'role' => $validated['role'],
+            ],
+        ]);
     }
 
     private function operationsCount(Household $household, User $user): int

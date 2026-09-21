@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/utils/cn';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'fresh' | 'ok' | 'soon' | 'overdue' | 'active' | 'consumed' | 'discarded' | 'neutral' | 'owner' | 'member';
+  variant?: 'fresh' | 'ok' | 'soon' | 'overdue' | 'active' | 'consumed' | 'discarded' | 'neutral' | 'owner' | 'manager' | 'member';
   size?: 'sm' | 'md';
 }
 
@@ -29,6 +29,8 @@ export function Badge({ className, variant = 'neutral', size = 'sm', children, .
     // Household roles
     owner:
       'bg-[#2d6a4f]/10 text-[#2d6a4f] border-[#2d6a4f]/20 dark:bg-[#2d6a4f]/30 dark:text-emerald-300 dark:border-[#2d6a4f]/50 font-semibold',
+    manager:
+      'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800 font-semibold',
     member:
       'bg-stone-100 text-stone-700 border-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700',
 
