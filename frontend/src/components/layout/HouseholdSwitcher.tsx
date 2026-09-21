@@ -47,7 +47,7 @@ export function HouseholdSwitcher() {
         aria-expanded={isOpen}
         className="group flex items-center gap-2 pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl"
       >
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#2d6a4f] dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 truncate max-w-[200px] transition-all duration-150 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/60 group-hover:border-emerald-300 dark:group-hover:border-emerald-700 group-hover:shadow-xs">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-stone-700 truncate max-w-[200px] transition-all duration-150 group-hover:bg-stone-200 dark:group-hover:bg-stone-700 group-hover:border-stone-300 dark:group-hover:border-stone-600 group-hover:shadow-xs">
           {currentHousehold.name}
         </span>
         <ChevronDown
