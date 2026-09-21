@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { listMemberActivities, ActivityFilters } from '@/api/households';
+import { listHouseholdActivities, ActivityFilters } from '@/api/households';
 import { MemberActivity } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -21,11 +21,14 @@ import {
 
 type ActionFilter = 'all' | 'created' | 'updated';
 
-export function MemberActivities() {
-  const { userId } = useParams<{ userId: string }>();
+export function HouseholdActivities() {
+  const { householdId } = useParams<{ householdId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentHousehold } = useAuth();
 
+  const initialUserId = searchParams.get('user') ?? '';
+  const [userId, setUserId] = useState<string>(initialUserId);
   const [activities, setActivities] = useState<MemberActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,35 +36,49 @@ export function MemberActivities() {
   const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  const member = useMemo(
-    () => currentHousehold?.members?.find((m) => m.id === Number(userId)) ?? null,
-    [currentHousehold, userId]
+  const members = currentHousehold?.members ?? [];
+
+  const selectedMember = useMemo(
+    () => members.find((member) => member.id === Number(userId)) ?? null,
+    [members, userId]
   );
 
   useEffect(() => {
     async function load() {
-      if (!currentHousehold || !userId) return;
+      if (!householdId) return;
 
       try {
         setIsLoading(true);
         setError(null);
 
         const filters: ActivityFilters = {};
+        if (userId) filters.userId = Number(userId);
         if (actionFilter !== 'all') filters.action = actionFilter;
         if (statusFilter) filters.status = statusFilter;
         if (search.trim()) filters.search = search.trim();
 
-        const data = await listMemberActivities(currentHousehold.id, Number(userId), filters);
+        const data = await listHouseholdActivities(Number(householdId), filters);
         setActivities(data);
       } catch {
-        setError('Não foi possível carregar as atividades deste membro.');
+        setError('Não foi possível carregar as atividades desta despensa.');
       } finally {
         setIsLoading(false);
       }
     }
 
     load();
-  }, [currentHousehold, userId, actionFilter, statusFilter, search]);
+  }, [householdId, userId, actionFilter, statusFilter, search]);
+
+  const handleUserChange = (value: string) => {
+    setUserId(value);
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set('user', value);
+    } else {
+      next.delete('user');
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950 transition-colors">
@@ -79,10 +96,11 @@ export function MemberActivities() {
 
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            Atividades de {member?.name ?? 'membro'}
+            Atividades da despensa
           </h1>
           <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Histórico de operações na despensa {currentHousehold?.name}.
+            Histórico de operações em {currentHousehold?.name ?? 'sua despensa'}
+            {selectedMember ? ` — filtrando por ${selectedMember.name}` : ''}.
           </p>
         </div>
 
@@ -98,6 +116,19 @@ export function MemberActivities() {
               className="w-full h-10 pl-10 pr-4 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
             />
           </div>
+
+          <select
+            value={userId}
+            onChange={(e) => handleUserChange(e.target.value)}
+            className="h-10 px-3 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
+          >
+            <option value="">Todos os membros</option>
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
 
           <select
             value={actionFilter}
@@ -125,7 +156,7 @@ export function MemberActivities() {
           <CardHeader>
             <CardTitle>Operações ({activities.length})</CardTitle>
             <CardDescription>
-              Cada linha mostra um lote criado ou alterado por este membro.
+              Cada linha mostra um lote criado ou alterado nesta despensa.
             </CardDescription>
           </CardHeader>
 
@@ -154,7 +185,7 @@ export function MemberActivities() {
                   >
                     <div className="flex items-start gap-3 min-w-0">
                       <span className="w-8 h-8 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0">
-                        {activity.created_by_this_user ? (
+                        {activity.created_by ? (
                           <PlusCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         ) : (
                           <Pencil className="w-4 h-4 text-sky-600 dark:text-sky-400" />
@@ -170,23 +201,19 @@ export function MemberActivities() {
                           Validade: {formatDate(activity.expires_at)} &bull; Qtd: {activity.quantity}
                         </p>
                         <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
-                          {activity.created_by_this_user ? 'Criado' : 'Atualizado'} em{' '}
-                          {formatDate(activity.updated_at ?? activity.created_at, 'dd/MM/yyyy HH:mm')}
+                          {activity.created_by ? `Criado por ${activity.created_by.name}` : 'Criado'} em{' '}
+                          {formatDate(activity.created_at, 'dd/MM/yyyy HH:mm')}
+                          {activity.updated_by && (
+                            <>
+                              {' '}&bull; Atualizado por {activity.updated_by.name} em{' '}
+                              {formatDate(activity.updated_at, 'dd/MM/yyyy HH:mm')}
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {activity.created_by_this_user && (
-                        <Badge variant="member" size="sm">
-                          Criou
-                        </Badge>
-                      )}
-                      {activity.updated_by_this_user && (
-                        <Badge variant="owner" size="sm">
-                          Atualizou
-                        </Badge>
-                      )}
                       <Badge variant={activity.status} size="sm">
                         {activity.status === 'active'
                           ? 'Ativo'

@@ -46,7 +46,31 @@ it('lists members with joined date and operations count', function () {
         ->and($memberRow['joined_at'])->not->toBeNull();
 });
 
-it('lists activities of a member with filters', function () {
+it('exposes operations count in the current user payload', function () {
+    [$owner, $member, $household] = householdWithMembers();
+    $product = Product::create(['name' => 'Rice']);
+
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+        'created_by' => $member->id,
+        'updated_by' => $member->id,
+    ]);
+
+    $response = $this->actingAs($owner, 'sanctum')->getJson('/api/v1/me');
+
+    $response->assertOk();
+
+    $householdPayload = collect($response->json('user.households'))->firstWhere('id', $household->id);
+    $memberRow = collect($householdPayload['members'])->firstWhere('id', $member->id);
+
+    expect($memberRow['operations_count'])->toBe(1);
+});
+
+it('lists household activities with filters and is owner-only', function () {
     [$owner, $member, $household] = householdWithMembers();
     $rice = Product::create(['name' => 'Rice']);
     $beans = Product::create(['name' => 'Beans']);
@@ -71,17 +95,26 @@ it('lists activities of a member with filters', function () {
         'updated_by' => $member->id,
     ]);
 
+    // Guests must not see the operations report.
+    $this->actingAs($member, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/activities")
+        ->assertForbidden();
+
     $all = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/households/{$household->id}/members/{$member->id}/activities");
+        ->getJson("/api/v1/households/{$household->id}/activities");
     $all->assertOk()->assertJsonCount(2, 'data');
 
+    $byUser = $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/activities?user_id={$member->id}");
+    $byUser->assertOk()->assertJsonCount(2, 'data');
+
     $search = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/households/{$household->id}/members/{$member->id}/activities?search=Rice");
+        ->getJson("/api/v1/households/{$household->id}/activities?search=Rice");
     $search->assertOk()->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.product_name', 'Rice');
 
     $status = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/households/{$household->id}/members/{$member->id}/activities?status=consumed");
+        ->getJson("/api/v1/households/{$household->id}/activities?status=consumed");
     $status->assertOk()->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.product_name', 'Beans');
 });

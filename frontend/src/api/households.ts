@@ -21,24 +21,25 @@ export async function listMembers(householdId: number): Promise<HouseholdMember[
 }
 
 export interface ActivityFilters {
+  userId?: number;
   action?: 'created' | 'updated';
   status?: string;
   search?: string;
 }
 
-export async function listMemberActivities(
+export async function listHouseholdActivities(
   householdId: number,
-  userId: number,
   filters: ActivityFilters = {}
 ): Promise<MemberActivity[]> {
   const params = new URLSearchParams();
+  if (filters.userId) params.set('user_id', String(filters.userId));
   if (filters.action) params.set('action', filters.action);
   if (filters.status) params.set('status', filters.status);
   if (filters.search) params.set('search', filters.search);
 
   const query = params.toString();
   const payload = await apiClient<MemberActivity[] | DataEnvelope<MemberActivity[]>>(
-    `/api/v1/households/${householdId}/members/${userId}/activities${query ? `?${query}` : ''}`,
+    `/api/v1/households/${householdId}/activities${query ? `?${query}` : ''}`,
     { method: 'GET' }
   );
   return unwrap(payload);

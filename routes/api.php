@@ -27,7 +27,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::patch('/v1/products/{product}', [ProductController::class, 'update']);
     Route::post('/v1/households/{household}/invitations', [InvitationController::class, 'store']);
     Route::get('/v1/households/{household}/members', [HouseholdController::class, 'members']);
-    Route::get('/v1/households/{household}/members/{user}/activities', [HouseholdController::class, 'activities']);
+    Route::get('/v1/households/{household}/activities', [HouseholdController::class, 'activities']);
     Route::delete('/v1/households/{household}/members/{user}', [HouseholdController::class, 'removeMember']);
     Route::post('/v1/invitations/accept', [InvitationController::class, 'accept']);
 });

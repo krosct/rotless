@@ -42,8 +42,8 @@ export interface MemberActivity {
   status: BatchStatus;
   created_at?: string | null;
   updated_at?: string | null;
-  created_by_this_user: boolean;
-  updated_by_this_user: boolean;
+  created_by?: BatchActor | null;
+  updated_by?: BatchActor | null;
 }
 
 export interface Household {

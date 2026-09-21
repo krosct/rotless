@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\UpdateProfileRequest;
+use App\Models\Batch;
 use App\Models\Household;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Pivot;
@@ -99,10 +100,17 @@ final class AuthController extends Controller
             /** @var Pivot $pivot */
             $pivot = $household->getAttribute('pivot');
 
+            $operationsByUser = Batch::query()
+                ->where('household_id', $household->id)
+                ->whereNotNull('created_by')
+                ->selectRaw('created_by as user_id, count(*) as total')
+                ->groupBy('created_by')
+                ->pluck('total', 'user_id');
+
             $members = $household->users()
                 ->withPivot('role', 'created_at')
                 ->get()
-                ->map(function (User $member): array {
+                ->map(function (User $member) use ($operationsByUser): array {
                     /** @var Pivot $memberPivot */
                     $memberPivot = $member->getAttribute('pivot');
 
@@ -112,6 +120,7 @@ final class AuthController extends Controller
                         'email' => $member->email,
                         'role' => $memberPivot->getAttribute('role'),
                         'joined_at' => $memberPivot->getAttribute('created_at'),
+                        'operations_count' => (int) ($operationsByUser[$member->id] ?? 0),
                     ];
                 })
                 ->values()

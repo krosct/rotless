@@ -42,28 +42,29 @@ final class HouseholdController extends Controller
         return response()->json(['data' => $members]);
     }
 
-    public function activities(Request $request, Household $household, User $user): JsonResponse
+    public function activities(Request $request, Household $household): JsonResponse
     {
-        $this->authorize('view', $household);
-
-        $isMember = $household->users()->whereKey($user->id)->exists();
-        abort_unless($isMember, 404);
+        $this->authorize('manageMembers', $household);
 
         $query = Batch::query()
-            ->with('product')
+            ->with(['product', 'creator', 'updater'])
             ->where('household_id', $household->id)
-            ->where(function ($builder) use ($user): void {
-                $builder->where('created_by', $user->id)
-                    ->orWhere('updated_by', $user->id);
-            })
             ->orderByDesc('updated_at');
+
+        if ($request->filled('user_id')) {
+            $userId = $request->integer('user_id');
+            $query->where(function ($builder) use ($userId): void {
+                $builder->where('created_by', $userId)
+                    ->orWhere('updated_by', $userId);
+            });
+        }
 
         if ($request->filled('action')) {
             $action = $request->string('action')->toString();
             if ($action === 'created') {
-                $query->where('created_by', $user->id);
+                $query->whereNotNull('created_by');
             } elseif ($action === 'updated') {
-                $query->where('updated_by', $user->id)->whereColumn('updated_by', '!=', 'created_by');
+                $query->whereNotNull('updated_by')->whereColumn('updated_by', '!=', 'created_by');
             }
         }
 
@@ -76,22 +77,23 @@ final class HouseholdController extends Controller
             $query->whereHas('product', fn ($builder) => $builder->whereLike('name', "%{$search}%", caseSensitive: false));
         }
 
-        $activities = $query->get()->map(function (Batch $batch) use ($user): array {
-            $isCreator = $batch->created_by === $user->id;
-            $isUpdater = $batch->updated_by === $user->id;
-
-            return [
-                'batch_id' => $batch->id,
-                'product_name' => $batch->product->name,
-                'quantity' => $batch->quantity,
-                'expires_at' => $batch->expires_at->toDateString(),
-                'status' => $batch->status->value,
-                'created_at' => $batch->created_at?->toIso8601String(),
-                'updated_at' => $batch->updated_at?->toIso8601String(),
-                'created_by_this_user' => $isCreator,
-                'updated_by_this_user' => $isUpdater,
-            ];
-        })->values()->all();
+        $activities = $query->get()->map(fn (Batch $batch): array => [
+            'batch_id' => $batch->id,
+            'product_name' => $batch->product->name,
+            'quantity' => $batch->quantity,
+            'expires_at' => $batch->expires_at->toDateString(),
+            'status' => $batch->status->value,
+            'created_at' => $batch->created_at?->toIso8601String(),
+            'updated_at' => $batch->updated_at?->toIso8601String(),
+            'created_by' => $batch->creator === null ? null : [
+                'id' => $batch->creator->id,
+                'name' => $batch->creator->name,
+            ],
+            'updated_by' => $batch->updater === null ? null : [
+                'id' => $batch->updater->id,
+                'name' => $batch->updater->name,
+            ],
+        ])->values()->all();
 
         return response()->json(['data' => $activities]);
     }

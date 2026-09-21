@@ -6,7 +6,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { BatchNew } from '@/pages/BatchNew';
 import { BatchEdit } from '@/pages/BatchEdit';
 import { Settings } from '@/pages/Settings';
-import { MemberActivities } from '@/pages/MemberActivities';
+import { HouseholdActivities } from '@/pages/HouseholdActivities';
 import { AcceptInvite } from '@/pages/AcceptInvite';
 import { Loader2 } from 'lucide-react';
 
@@ -113,10 +113,10 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/settings/members/:userId/activities',
+    path: '/households/:householdId/activities',
     element: (
       <ProtectedRoute>
-        <MemberActivities />
+        <HouseholdActivities />
       </ProtectedRoute>
     ),
   },
