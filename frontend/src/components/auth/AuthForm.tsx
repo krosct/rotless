@@ -167,7 +167,7 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
             isLoading={isSubmitting}
             className="w-full mt-2"
           >
-            <LogIn className="w-4 h-4 mr-2" />
+            <LogIn className="w-4 h-4 shrink-0" />
             Entrar na Despensa
           </Button>
 
@@ -231,7 +231,7 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
             isLoading={isSubmitting}
             className="w-full mt-2"
           >
-            <UserPlus className="w-4 h-4 mr-2" />
+            <UserPlus className="w-4 h-4 shrink-0" />
             Criar Minha Despensa
           </Button>
         </form>
