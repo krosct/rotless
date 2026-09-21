@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useBatches,
@@ -15,7 +15,7 @@ import { BatchForm } from '@/components/batches/BatchForm';
 import { ConsumeBatchModal, ConsumeAction } from '@/components/batches/ConsumeBatchModal';
 import { ProductEditModal } from '@/components/batches/ProductEditModal';
 import { Modal } from '@/components/ui/Modal';
-import { ProductGroup } from '@/utils/groupBatches';
+import { ProductGroup, groupBatchesByProduct } from '@/utils/groupBatches';
 import { Bell, AlertTriangle, Sparkles } from 'lucide-react';
 import { expiryTone } from '@/utils/expiry';
 
@@ -29,11 +29,20 @@ export function Dashboard() {
 
   // Modal states
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<ProductGroup | null>(null);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [consumeTarget, setConsumeTarget] = useState<{
     group: ProductGroup;
     action: ConsumeAction;
   } | null>(null);
+
+  // Derive the group from fresh data so the edit modal reflects saved changes.
+  const editingGroup = useMemo(
+    () =>
+      editingProductId === null
+        ? null
+        : groupBatchesByProduct(batches).find((group) => group.productId === editingProductId) ?? null,
+    [batches, editingProductId]
+  );
 
   const handleOpenNewModal = () => {
     setIsNewModalOpen(true);
@@ -81,9 +90,9 @@ export function Dashboard() {
   };
 
   const handleSaveProduct = async (input: { name: string; photo: File | null }) => {
-    if (!editingGroup) return;
+    if (editingProductId === null) return;
     await updateProductMutation.mutateAsync({
-      id: editingGroup.productId,
+      id: editingProductId,
       input,
     });
   };
@@ -108,7 +117,7 @@ export function Dashboard() {
       )
     );
 
-    setEditingGroup(null);
+    setEditingProductId(null);
   };
 
   const handleDeleteBatch = (id: number) => {
@@ -172,7 +181,7 @@ export function Dashboard() {
           batches={batches}
           isLoading={isLoading}
           onAddNew={handleOpenNewModal}
-          onEditGroup={(group) => setEditingGroup(group)}
+          onEditGroup={(group) => setEditingProductId(group.productId)}
           onConsume={handleConsumeRequest}
           onDeleteBatch={handleDeleteBatch}
         />
@@ -199,7 +208,7 @@ export function Dashboard() {
         isOpen={!!editingGroup}
         group={editingGroup}
         isLoading={updateMutation.isPending || updateProductMutation.isPending}
-        onClose={() => setEditingGroup(null)}
+        onClose={() => setEditingProductId(null)}
         onSaveProduct={handleSaveProduct}
         onSaveEntry={handleSaveEntry}
         onConsumeAll={handleConsumeAll}

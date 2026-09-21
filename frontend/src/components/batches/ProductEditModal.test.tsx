@@ -4,6 +4,21 @@ import userEvent from '@testing-library/user-event';
 import { ProductEditModal } from './ProductEditModal';
 import { ProductGroup } from '@/utils/groupBatches';
 
+function makeGroupWithQuantity(quantity: number): ProductGroup {
+  const group = makeGroup();
+  return {
+    ...group,
+    entries: [
+      {
+        ...group.entries[0],
+        quantity,
+        batch: { ...group.entries[0].batch, quantity },
+      },
+      group.entries[1],
+    ],
+  };
+}
+
 function makeGroup(): ProductGroup {
   return {
     productId: 10,
@@ -86,5 +101,34 @@ describe('ProductEditModal', () => {
       expires_at: '2026-11-01',
       status: 'active',
     });
+  });
+
+  it('reflete a quantidade atualizada quando o grupo recebe dados frescos', () => {
+    const { rerender } = render(
+      <ProductEditModal
+        isOpen
+        group={makeGroupWithQuantity(2)}
+        onClose={vi.fn()}
+        onSaveProduct={vi.fn()}
+        onSaveEntry={vi.fn()}
+        onConsumeAll={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/2 un/)).toBeDefined();
+
+    rerender(
+      <ProductEditModal
+        isOpen
+        group={makeGroupWithQuantity(9)}
+        onClose={vi.fn()}
+        onSaveProduct={vi.fn()}
+        onSaveEntry={vi.fn()}
+        onConsumeAll={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/9 un/)).toBeDefined();
+    expect(screen.queryByText(/2 un/)).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -42,19 +42,30 @@ export function ProductEditModal({
   const [name, setName] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [selectedEntry, setSelectedEntry] = useState<BatchEntry | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [entryQuantity, setEntryQuantity] = useState(1);
   const [entryExpiresAt, setEntryExpiresAt] = useState('');
   const [entryStatus, setEntryStatus] = useState<BatchStatus>('active');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const productId = group?.productId ?? null;
+
+  // Reset the form only when the modal opens or switches to another product,
+  // so live data updates do not wipe what the user is typing.
   useEffect(() => {
     if (!isOpen || !group) return;
     setName(group.product.name);
     setPhotoFile(null);
     setPhotoPreview(group.product.photo_url ?? null);
-    setSelectedEntry(null);
-  }, [isOpen, group]);
+    setSelectedBatchId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, productId]);
+
+  // Keep the selected entry in sync with fresh data after a save.
+  const selectedEntry = useMemo(
+    () => group?.entries.find((entry) => entry.batch.id === selectedBatchId) ?? null,
+    [group, selectedBatchId]
+  );
 
   const handlePhotoSelect = (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
@@ -68,7 +79,7 @@ export function ProductEditModal({
   };
 
   const handleSelectEntry = (entry: BatchEntry) => {
-    setSelectedEntry(entry);
+    setSelectedBatchId(entry.batch.id);
     setEntryQuantity(entry.quantity);
     setEntryExpiresAt(entry.expires_at);
     setEntryStatus(entry.batch.status);
@@ -83,13 +94,13 @@ export function ProductEditModal({
   };
 
   const handleSaveEntry = async () => {
-    if (!selectedEntry) return;
-    await onSaveEntry(selectedEntry.batch.id, {
+    if (selectedBatchId === null) return;
+    await onSaveEntry(selectedBatchId, {
       quantity: entryQuantity,
       expires_at: entryExpiresAt,
       status: entryStatus,
     });
-    setSelectedEntry(null);
+    setSelectedBatchId(null);
   };
 
   if (!group) return null;
@@ -111,7 +122,7 @@ export function ProductEditModal({
         <div className="flex flex-col gap-4 text-left">
           <button
             type="button"
-            onClick={() => setSelectedEntry(null)}
+            onClick={() => setSelectedBatchId(null)}
             className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 self-start"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -148,7 +159,7 @@ export function ProductEditModal({
           />
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-100 dark:border-stone-800">
-            <Button type="button" variant="secondary" onClick={() => setSelectedEntry(null)}>
+            <Button type="button" variant="secondary" onClick={() => setSelectedBatchId(null)}>
               Cancelar
             </Button>
             <Button type="button" variant="primary" isLoading={isLoading} onClick={handleSaveEntry}>
