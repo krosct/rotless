@@ -116,7 +116,7 @@ export function MemberList({
         )}
       </div>
 
-      <div className="divide-y divide-stone-100 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl bg-white dark:bg-stone-900 overflow-hidden">
+      <div className="divide-y divide-stone-100 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl bg-white dark:bg-stone-900">
         {members.map((member) => {
           const isMemberOwner = member.role === 'owner';
 
@@ -124,7 +124,7 @@ export function MemberList({
             <div
               key={member.id}
               data-testid="member-row"
-              className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-stone-50/50 dark:hover:bg-stone-800 transition-colors"
+              className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-stone-50/50 dark:hover:bg-stone-800 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">
