@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HouseholdMember } from '@/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { InviteModal } from './InviteModal';
 import { removeMember } from '@/api/households';
 import { formatDate } from '@/utils/format';
@@ -26,21 +27,23 @@ export function MemberList({
 }: MemberListProps) {
   const navigate = useNavigate();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [removingId, setRemovingId] = useState<number | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
-  const handleRemove = async (member: HouseholdMember) => {
-    if (!window.confirm(`Remover ${member.name} desta despensa?`)) return;
+  const handleConfirmRemove = async () => {
+    if (!memberToRemove) return;
 
-    setRemovingId(member.id);
+    setIsRemoving(true);
     try {
-      await removeMember(householdId, member.id);
-      toast.success(`${member.name} foi removido da despensa.`);
+      await removeMember(householdId, memberToRemove.id);
+      toast.success(`${memberToRemove.name} foi removido da despensa.`);
+      setMemberToRemove(null);
       if (onRefresh) onRefresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao remover membro.';
       toast.error(msg);
     } finally {
-      setRemovingId(null);
+      setIsRemoving(false);
     }
   };
 
@@ -99,15 +102,19 @@ export function MemberList({
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => navigate(`/settings/members/${member.id}/activities`)}
-                  title="Ver atividades deste membro"
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-                >
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>{member.operations_count ?? 0}</span>
-                </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/households/${householdId}/activities?user=${member.id}`)
+                    }
+                    title="Ver atividades deste membro"
+                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:scale-105 active:scale-95 transition-all duration-150"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>{member.operations_count ?? 0}</span>
+                  </button>
+                )}
 
                 <Badge variant={isMemberOwner ? 'owner' : 'member'} size="sm">
                   {isMemberOwner ? (
@@ -127,8 +134,7 @@ export function MemberList({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleRemove(member)}
-                    isLoading={removingId === member.id}
+                    onClick={() => setMemberToRemove(member)}
                     title="Remover membro"
                     className="h-8 px-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"
                   >
@@ -148,6 +154,16 @@ export function MemberList({
         householdId={householdId}
         householdName={householdName}
         onSuccess={onRefresh}
+      />
+
+      <ConfirmDialog
+        isOpen={!!memberToRemove}
+        title="Remover membro"
+        description={`Tem certeza que deseja remover ${memberToRemove?.name ?? 'este membro'} da despensa "${householdName}"? Ele perderá o acesso aos lotes.`}
+        confirmLabel="Remover"
+        isLoading={isRemoving}
+        onConfirm={handleConfirmRemove}
+        onClose={() => setMemberToRemove(null)}
       />
     </div>
   );
