@@ -26,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/v1/openfoodfacts/{barcode}', [BatchController::class, 'lookupBarcode']);
     Route::patch('/v1/products/{product}', [ProductController::class, 'update']);
     Route::post('/v1/households/{household}/invitations', [InvitationController::class, 'store']);
+    Route::patch('/v1/households/{household}', [HouseholdController::class, 'update']);
     Route::get('/v1/households/{household}/members', [HouseholdController::class, 'members']);
     Route::get('/v1/households/{household}/activities', [HouseholdController::class, 'activities']);
     Route::get('/v1/households/{household}/actors', [HouseholdController::class, 'actors']);

@@ -21,6 +21,36 @@ function householdWithMembers(): array
     return [$owner, $member, $household];
 }
 
+it('lets only the owner rename the household', function () {
+    [$owner, $member, $household] = householdWithMembers();
+    $manager = User::factory()->create();
+    $household->users()->attach($manager->id, ['role' => HouseholdRole::Manager->value]);
+
+    $this->actingAs($member, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}", ['name' => 'Nope'])
+        ->assertForbidden();
+
+    $this->actingAs($manager, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}", ['name' => 'Nope'])
+        ->assertForbidden();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}", ['name' => 'Casa Nova'])
+        ->assertOk()
+        ->assertJsonPath('household.name', 'Casa Nova');
+
+    expect($household->fresh()->name)->toBe('Casa Nova');
+});
+
+it('rejects renaming with an invalid name', function () {
+    [$owner, , $household] = householdWithMembers();
+
+    $this->actingAs($owner, 'sanctum')
+        ->patchJson("/api/v1/households/{$household->id}", ['name' => 'a'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['name']);
+});
+
 it('lets a manager view activities but not remove members or change roles', function () {
     [$owner, $member, $household] = householdWithMembers();
     $manager = User::factory()->create(['name' => 'Manager']);

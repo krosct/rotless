@@ -18,6 +18,25 @@ final class HouseholdController extends Controller
 {
     use AuthorizesRequests;
 
+    public function update(Request $request, Household $household): JsonResponse
+    {
+        $this->authorize('removeMembers', $household);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:255'],
+        ]);
+
+        $household->update(['name' => $validated['name']]);
+
+        return response()->json([
+            'message' => 'Household updated.',
+            'household' => [
+                'id' => $household->id,
+                'name' => $household->name,
+            ],
+        ]);
+    }
+
     public function members(Request $request, Household $household): JsonResponse
     {
         $this->authorize('view', $household);

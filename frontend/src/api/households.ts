@@ -12,6 +12,19 @@ function unwrap<T>(payload: T | DataEnvelope<T>): T {
   return payload as T;
 }
 
+export async function updateHousehold(
+  householdId: number,
+  name: string
+): Promise<{ message: string; household: { id: number; name: string } }> {
+  return apiClient<{ message: string; household: { id: number; name: string } }>(
+    `/api/v1/households/${householdId}`,
+    {
+      method: 'PATCH',
+      body: { name },
+    }
+  );
+}
+
 export async function listMembers(householdId: number): Promise<HouseholdMember[]> {
   const payload = await apiClient<HouseholdMember[] | DataEnvelope<HouseholdMember[]>>(
     `/api/v1/households/${householdId}/members`,
