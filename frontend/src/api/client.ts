@@ -1,86 +1,146 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+import { ApiValidationError } from '@/types';
 
-const TOKEN_KEY = 'rotless_token';
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
+export const TOKEN_STORAGE_KEY = 'rotless_token';
+export const API_URL_STORAGE_KEY = 'rotless_api_url';
 
 export class ApiError extends Error {
-  readonly status: number;
+  status: number;
+  data?: unknown;
+  errors?: Record<string, string[]>;
 
-  readonly errors?: Record<string, string[]>;
-
-  constructor(status: number, message: string, errors?: Record<string, string[]>) {
+  constructor(status: number, message: string, data?: unknown, errors?: Record<string, string[]>) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.data = data;
     this.errors = errors;
   }
 }
 
-interface ApiFetchOptions {
-  method?: string;
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } catch {
+    // Handle quota or private mode
+  }
+}
+
+export function removeToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
+export function getApiBaseUrl(): string {
+  try {
+    const custom = localStorage.getItem(API_URL_STORAGE_KEY);
+    if (custom && custom.trim().length > 0) {
+      return custom.trim().replace(/\/$/, '');
+    }
+  } catch {
+    // Ignore
+  }
+  // Check VITE_API_URL if configured
+  const envUrl = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '');
+  }
+  return '';
+}
+
+export function setCustomApiUrl(url: string | null): void {
+  try {
+    if (!url) {
+      localStorage.removeItem(API_URL_STORAGE_KEY);
+    } else {
+      localStorage.setItem(API_URL_STORAGE_KEY, url.trim().replace(/\/$/, ''));
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
 }
 
-interface ErrorEnvelope {
-  message: string;
-  errors?: Record<string, string[]>;
-}
+export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const baseUrl = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${baseUrl}${cleanEndpoint}`;
 
-function parseErrorEnvelope(data: unknown): ErrorEnvelope | null {
-  if (typeof data !== 'object' || data === null) {
-    return null;
-  }
-  const record = data as Record<string, unknown>;
-  if (typeof record['message'] !== 'string') {
-    return null;
-  }
-  const envelope: ErrorEnvelope = { message: record['message'] };
-  if (typeof record['errors'] === 'object' && record['errors'] !== null) {
-    const errors: Record<string, string[]> = {};
-    for (const [field, messages] of Object.entries(record['errors'] as Record<string, unknown>)) {
-      if (Array.isArray(messages) && messages.every((entry): entry is string => typeof entry === 'string')) {
-        errors[field] = messages;
-      }
-    }
-    envelope.errors = errors;
-  }
-  return envelope;
-}
+  const headers = new Headers(options.headers || {});
 
-export async function apiFetch<T>(path: string, { method = 'GET', body }: ApiFetchOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
   const token = getToken();
-  if (token !== null) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
-  let payload: BodyInit | undefined;
-  if (body instanceof FormData) {
-    // Let the browser set the multipart boundary.
-    payload = body;
-  } else if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    payload = JSON.stringify(body);
+  let body: BodyInit | null | undefined = undefined;
+
+  if (options.body instanceof FormData) {
+    // Let browser set multipart/form-data boundary automatically
+    body = options.body;
+  } else if (options.body !== undefined && options.body !== null) {
+    headers.set('Content-Type', 'application/json');
+    headers.set('Accept', 'application/json');
+    body = JSON.stringify(options.body);
+  } else {
+    headers.set('Accept', 'application/json');
   }
 
-  const response = await fetch(`${API_URL}${path}`, { method, headers, body: payload });
-  const data: unknown = await response.json().catch(() => null);
+  const response = await fetch(url, {
+    ...options,
+    headers,
+    body,
+  });
+
+  let responseData: unknown = null;
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      responseData = await response.json();
+    } catch {
+      responseData = null;
+    }
+  } else {
+    try {
+      responseData = await response.text();
+    } catch {
+      responseData = null;
+    }
+  }
 
   if (!response.ok) {
-    const envelope = parseErrorEnvelope(data);
-    throw new ApiError(response.status, envelope?.message ?? `Request failed (${response.status})`, envelope?.errors);
+    let message = `Request failed with status ${response.status}`;
+    let errors: Record<string, string[]> | undefined = undefined;
+
+    if (responseData && typeof responseData === 'object') {
+      const errObj = responseData as ApiValidationError;
+      if (errObj.message) {
+        message = errObj.message;
+      }
+      if (errObj.errors && typeof errObj.errors === 'object') {
+        errors = errObj.errors;
+      }
+    }
+
+    if (response.status === 401) {
+      removeToken();
+    }
+
+    throw new ApiError(response.status, message, responseData, errors);
   }
 
-  return data as T;
+  return responseData as T;
 }
