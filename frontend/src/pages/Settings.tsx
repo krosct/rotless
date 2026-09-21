@@ -5,7 +5,6 @@ import { Footer } from '@/components/layout/Footer';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { MemberList } from '@/components/household/MemberList';
 import { updateProfile } from '@/api/auth';
 import { getApiBaseUrl, setCustomApiUrl } from '@/api/client';
 import {
@@ -14,14 +13,12 @@ import {
   HelpCircle,
   CheckCircle2,
   Server,
-  Home,
-  Shield,
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Settings() {
-  const { user, currentHousehold, refreshMe } = useAuth();
+  const { user, refreshMe } = useAuth();
 
   // Profile states
   const [name, setName] = useState(user?.name || '');
@@ -62,8 +59,6 @@ export function Settings() {
     toast.success('URL da API configurada com sucesso!');
   };
 
-  const isOwner = currentHousehold?.role === 'owner' || currentHousehold?.is_owner === true;
-
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950 transition-colors">
       <Header />
@@ -71,10 +66,10 @@ export function Settings() {
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            Configurações da Conta & Despensa
+            Configurações da Conta
           </h1>
           <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Gerencie seu perfil, alertas via Telegram e os membros da sua despensa.
+            Gerencie seu perfil, alertas via Telegram e a conexão com o backend.
           </p>
         </div>
 
@@ -154,39 +149,6 @@ export function Settings() {
             </CardFooter>
           </form>
         </Card>
-
-        {/* Households & Members Management Section */}
-        {currentHousehold && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2.5">
-                  <Home className="w-5 h-5 text-[#2d6a4f] dark:text-emerald-400" />
-                  <div>
-                    <CardTitle>Despensa: {currentHousehold.name}</CardTitle>
-                    <CardDescription>
-                      Você é{' '}
-                      <strong className="text-stone-800 dark:text-stone-200">
-                        {isOwner ? 'Proprietário (Owner)' : 'Membro'}
-                      </strong>{' '}
-                      desta despensa.
-                    </CardDescription>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <MemberList
-                householdId={currentHousehold.id}
-                householdName={currentHousehold.name}
-                members={currentHousehold.members || []}
-                isOwner={isOwner}
-                onRefresh={refreshMe}
-              />
-            </CardContent>
-          </Card>
-        )}
 
         {/* Backend API Connection Card */}
         <Card>

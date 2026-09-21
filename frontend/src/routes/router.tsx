@@ -6,6 +6,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { BatchNew } from '@/pages/BatchNew';
 import { BatchEdit } from '@/pages/BatchEdit';
 import { Settings } from '@/pages/Settings';
+import { HouseholdSettings } from '@/pages/HouseholdSettings';
 import { HouseholdActivities } from '@/pages/HouseholdActivities';
 import { AcceptInvite } from '@/pages/AcceptInvite';
 import { Loader2 } from 'lucide-react';
@@ -109,6 +110,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <Settings />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/households/:householdId/settings',
+    element: (
+      <ProtectedRoute>
+        <HouseholdSettings />
       </ProtectedRoute>
     ),
   },

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Household } from '@/types';
-import { ChevronDown, Home, Users, Check } from 'lucide-react';
+import { ChevronDown, Home, Users, Check, Settings } from 'lucide-react';
 
 export function HouseholdSwitcher() {
   const { user, currentHousehold, setCurrentHousehold } = useAuth();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +31,11 @@ export function HouseholdSwitcher() {
   const handleSelect = (household: Household) => {
     setCurrentHousehold(household);
     setIsOpen(false);
+  };
+
+  const handleOpenSettings = (household: Household) => {
+    setIsOpen(false);
+    navigate(`/households/${household.id}/settings`);
   };
 
   return (
@@ -60,29 +67,45 @@ export function HouseholdSwitcher() {
             const isCurrent = household.id === currentHousehold.id;
 
             return (
-              <button
+              <div
                 key={household.id}
-                type="button"
-                role="option"
-                aria-selected={isCurrent}
-                onClick={() => handleSelect(household)}
-                className="group/item w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800 hover:pl-4 transition-all duration-150"
+                className="group/item flex items-center hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
               >
-                <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0 transition-colors duration-150 group-hover/item:bg-emerald-50 dark:group-hover/item:bg-emerald-950/60 group-hover/item:text-[#2d6a4f] dark:group-hover/item:text-emerald-400">
-                  {own ? <Home className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
-                </span>
-
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
-                    {household.name}
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isCurrent}
+                  onClick={() => handleSelect(household)}
+                  className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-all duration-150 group-hover/item:pl-4"
+                >
+                  <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0 transition-colors duration-150 group-hover/item:bg-emerald-50 dark:group-hover/item:bg-emerald-950/60 group-hover/item:text-[#2d6a4f] dark:group-hover/item:text-emerald-400">
+                    {own ? <Home className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
                   </span>
-                  <span className="block text-[11px] text-stone-500 dark:text-stone-400">
-                    {own ? 'Sua despensa' : 'Convidado'}
-                  </span>
-                </span>
 
-                {isCurrent && <Check className="w-4 h-4 text-[#2d6a4f] dark:text-emerald-400 shrink-0" />}
-              </button>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
+                      {household.name}
+                    </span>
+                    <span className="block text-[11px] text-stone-500 dark:text-stone-400">
+                      {own ? 'Sua despensa' : 'Convidado'}
+                    </span>
+                  </span>
+
+                  {isCurrent && <Check className="w-4 h-4 text-[#2d6a4f] dark:text-emerald-400 shrink-0" />}
+                </button>
+
+                {own && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSettings(household)}
+                    title="Configurações da despensa"
+                    aria-label={`Configurações de ${household.name}`}
+                    className="mr-2 p-1.5 rounded-lg text-stone-400 hover:text-[#2d6a4f] dark:hover:text-emerald-400 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors shrink-0"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>

@@ -7,9 +7,9 @@ import {
   LogOut,
   Moon,
   Sun,
-  Settings as SettingsIcon,
   Home,
   Plus,
+  User as UserIcon,
 } from 'lucide-react';
 
 export interface HeaderProps {
@@ -73,17 +73,6 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
             <span className="sr-only">Dashboard</span>
           </Link>
 
-          <Link
-            to="/settings"
-            className={`p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
-              location.pathname === '/settings' ? 'bg-stone-100 dark:bg-stone-800 text-[#2d6a4f] dark:text-emerald-400' : ''
-            }`}
-            title="Configurações e Membros"
-          >
-            <SettingsIcon className="w-5 h-5" />
-            <span className="sr-only">Configurações</span>
-          </Link>
-
           {/* Theme Toggle */}
           <button
             type="button"
@@ -97,9 +86,21 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
           {/* User info & Logout */}
           <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-stone-200 dark:border-stone-800">
             {user && (
-              <span className="hidden lg:inline text-xs font-medium text-stone-600 dark:text-stone-400 truncate max-w-[120px]">
-                {user.name.split(' ')[0]}
-              </span>
+              <Link
+                to="/settings"
+                title="Configurações da conta"
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-colors ${
+                  location.pathname === '/settings'
+                    ? 'bg-stone-100 dark:bg-stone-800 text-[#2d6a4f] dark:text-emerald-400'
+                    : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                }`}
+              >
+                <UserIcon className="w-4 h-4 shrink-0" />
+                <span className="hidden lg:inline text-xs font-medium truncate max-w-[120px]">
+                  {user.name.split(' ')[0]}
+                </span>
+                <span className="sr-only">Configurações da conta</span>
+              </Link>
             )}
             <Button
               size="sm"
