@@ -42,15 +42,21 @@ export function ConsumeBatchModal({
   const maxQuantity = selectedEntry?.quantity ?? 1;
   const isConsume = action === 'consumed';
 
+  const quantityError =
+    !Number.isInteger(quantity) || quantity < 1
+      ? 'A quantidade deve ser um número inteiro maior ou igual a 1.'
+      : quantity > maxQuantity
+      ? `A quantidade não pode ser maior que ${maxQuantity} un disponíveis nesta entrada.`
+      : null;
+
   const handleSelect = (batchId: number, entryQuantity: number) => {
     setSelectedBatchId(batchId);
     setQuantity(entryQuantity);
   };
 
   const handleConfirm = () => {
-    if (selectedBatchId === null) return;
-    const safeQuantity = Math.min(Math.max(1, quantity), maxQuantity);
-    onConfirm(selectedBatchId, safeQuantity);
+    if (selectedBatchId === null || quantityError !== null) return;
+    onConfirm(selectedBatchId, quantity);
   };
 
   return (
@@ -113,6 +119,7 @@ export function ConsumeBatchModal({
           label="Quantidade"
           value={quantity}
           onChange={(e) => setQuantity(Number(e.target.value))}
+          error={quantityError ?? undefined}
           helperText={`Máximo disponível nesta entrada: ${maxQuantity} un.`}
         />
 
@@ -124,7 +131,7 @@ export function ConsumeBatchModal({
             type="button"
             variant={isConsume ? 'success' : 'danger'}
             isLoading={isLoading}
-            disabled={selectedBatchId === null}
+            disabled={selectedBatchId === null || quantityError !== null}
             onClick={handleConfirm}
           >
             {isConsume ? (

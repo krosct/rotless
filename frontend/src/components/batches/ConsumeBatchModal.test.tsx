@@ -68,4 +68,32 @@ describe('ConsumeBatchModal', () => {
 
     expect(onConfirm).toHaveBeenCalledWith(2, 5);
   });
+
+  it('bloqueia a confirmação quando a quantidade excede o disponível', async () => {
+    const entries = [makeEntry(1, 18, '2026-10-01')];
+    const onConfirm = vi.fn();
+
+    render(
+      <ConsumeBatchModal
+        isOpen
+        action="consumed"
+        productName="Leite"
+        entries={entries}
+        onClose={vi.fn()}
+        onConfirm={onConfirm}
+      />
+    );
+
+    const quantityInput = screen.getByLabelText(/Quantidade/i);
+    await userEvent.clear(quantityInput);
+    await userEvent.type(quantityInput, '99');
+
+    expect(screen.getByText(/não pode ser maior que 18/i)).toBeDefined();
+
+    const confirmButton = screen.getByRole('button', { name: /Confirmar consumo/i }) as HTMLButtonElement;
+    expect(confirmButton.disabled).toBe(true);
+
+    await userEvent.click(confirmButton);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
