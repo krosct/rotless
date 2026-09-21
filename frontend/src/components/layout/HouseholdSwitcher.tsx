@@ -38,12 +38,16 @@ export function HouseholdSwitcher() {
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className="flex items-center gap-2 pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl"
+        className="group flex items-center gap-2 pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl"
       >
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#2d6a4f] dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 truncate max-w-[200px]">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#2d6a4f] dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 truncate max-w-[200px] transition-all duration-150 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/60 group-hover:border-emerald-300 dark:group-hover:border-emerald-700 group-hover:shadow-xs">
           {currentHousehold.name}
         </span>
-        <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-stone-400 shrink-0 transition-transform duration-200 ${
+            isOpen ? 'rotate-180' : 'group-hover:translate-y-0.5'
+          }`}
+        />
       </button>
 
       {isOpen && (
@@ -62,9 +66,9 @@ export function HouseholdSwitcher() {
                 role="option"
                 aria-selected={isCurrent}
                 onClick={() => handleSelect(household)}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
+                className="group/item w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800 hover:pl-4 transition-all duration-150"
               >
-                <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0">
+                <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0 transition-colors duration-150 group-hover/item:bg-emerald-50 dark:group-hover/item:bg-emerald-950/60 group-hover/item:text-[#2d6a4f] dark:group-hover/item:text-emerald-400">
                   {own ? <Home className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
                 </span>
 
