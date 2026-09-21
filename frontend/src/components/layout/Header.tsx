@@ -1,6 +1,7 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
+import { HouseholdSwitcher } from './HouseholdSwitcher';
 import {
   Leaf,
   LogOut,
@@ -16,7 +17,7 @@ export interface HeaderProps {
 }
 
 export function Header({ onOpenNewBatchModal }: HeaderProps) {
-  const { user, currentHousehold, logout, theme, toggleTheme } = useAuth();
+  const { user, logout, theme, toggleTheme } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -42,13 +43,7 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
             </span>
           </Link>
 
-          {currentHousehold && (
-            <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#2d6a4f] dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 truncate max-w-[200px]">
-                {currentHousehold.name}
-              </span>
-            </div>
-          )}
+          <HouseholdSwitcher />
         </div>
 
         {/* Right navigation actions */}
