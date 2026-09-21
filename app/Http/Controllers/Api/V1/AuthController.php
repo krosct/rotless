@@ -99,11 +99,30 @@ final class AuthController extends Controller
             /** @var Pivot $pivot */
             $pivot = $household->getAttribute('pivot');
 
+            $members = $household->users()
+                ->withPivot('role', 'created_at')
+                ->get()
+                ->map(function (User $member): array {
+                    /** @var Pivot $memberPivot */
+                    $memberPivot = $member->getAttribute('pivot');
+
+                    return [
+                        'id' => $member->id,
+                        'name' => $member->name,
+                        'email' => $member->email,
+                        'role' => $memberPivot->getAttribute('role'),
+                        'joined_at' => $memberPivot->getAttribute('created_at'),
+                    ];
+                })
+                ->values()
+                ->all();
+
             return [
                 'id' => $household->id,
                 'name' => $household->name,
                 'is_owner' => $pivot->getAttribute('role') === HouseholdRole::Owner->value,
                 'role' => $pivot->getAttribute('role'),
+                'members' => $members,
             ];
         })->values()->all();
 

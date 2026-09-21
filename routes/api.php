@@ -3,7 +3,9 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BatchController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\HouseholdController;
 use App\Http\Controllers\Api\V1\InvitationController;
+use App\Http\Controllers\Api\V1\ProductController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/v1/health', HealthController::class);
@@ -22,6 +24,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::patch('/v1/batches/{batch}', [BatchController::class, 'update']);
     Route::delete('/v1/batches/{batch}', [BatchController::class, 'destroy']);
     Route::get('/v1/openfoodfacts/{barcode}', [BatchController::class, 'lookupBarcode']);
+    Route::patch('/v1/products/{product}', [ProductController::class, 'update']);
     Route::post('/v1/households/{household}/invitations', [InvitationController::class, 'store']);
+    Route::get('/v1/households/{household}/members', [HouseholdController::class, 'members']);
+    Route::get('/v1/households/{household}/members/{user}/activities', [HouseholdController::class, 'activities']);
+    Route::delete('/v1/households/{household}/members/{user}', [HouseholdController::class, 'removeMember']);
     Route::post('/v1/invitations/accept', [InvitationController::class, 'accept']);
 });

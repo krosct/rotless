@@ -31,6 +31,19 @@ export interface HouseholdMember {
   email: string;
   role: 'owner' | 'member';
   joined_at?: string;
+  operations_count?: number;
+}
+
+export interface MemberActivity {
+  batch_id: number;
+  product_name: string;
+  quantity: number;
+  expires_at: string;
+  status: BatchStatus;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_by_this_user: boolean;
+  updated_by_this_user: boolean;
 }
 
 export interface Household {
