@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 export function AcceptInvite() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: isAuthLoading, refreshMe } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, refreshMe, setCurrentHousehold } = useAuth();
 
   const [invite, setInvite] = useState<InvitationInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +56,13 @@ export function AcceptInvite() {
       const res = await acceptInvitation(token);
       toast.success(res.message || 'Convite aceito com sucesso!');
       await refreshMe();
+      // Select the household the user just joined, not their own pantry.
+      setCurrentHousehold({
+        id: res.household.id,
+        name: res.household.name,
+        role: res.household.role,
+        is_owner: res.household.role === 'owner',
+      });
       navigate('/dashboard');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao aceitar convite.';
