@@ -39,8 +39,12 @@ export function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 hover:bg-white/50 dark:hover:bg-stone-700'
             )}
           >
-            {tab.icon && <span className="w-4 h-4 shrink-0">{tab.icon}</span>}
-            <span>{tab.label}</span>
+            {tab.icon && (
+              <span className="inline-flex items-center justify-center w-4 h-4 shrink-0 [&>svg]:w-4 [&>svg]:h-4">
+                {tab.icon}
+              </span>
+            )}
+            <span className="leading-none">{tab.label}</span>
           </button>
         );
       })}
