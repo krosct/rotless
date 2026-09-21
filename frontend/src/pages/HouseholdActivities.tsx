@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { listHouseholdActivities, ActivityFilters } from '@/api/households';
-import { MemberActivity } from '@/types';
+import { listHouseholdActivities, listHouseholdActors, ActivityFilters } from '@/api/households';
+import { HouseholdActor, MemberActivity } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
@@ -30,18 +30,31 @@ export function HouseholdActivities() {
   const initialUserId = searchParams.get('user') ?? '';
   const [userId, setUserId] = useState<string>(initialUserId);
   const [activities, setActivities] = useState<MemberActivity[]>([]);
+  const [actors, setActors] = useState<HouseholdActor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  const members = currentHousehold?.members ?? [];
-
-  const selectedMember = useMemo(
-    () => members.find((member) => member.id === Number(userId)) ?? null,
-    [members, userId]
+  const selectedActor = useMemo(
+    () => actors.find((actor) => actor.id === Number(userId)) ?? null,
+    [actors, userId]
   );
+
+  useEffect(() => {
+    async function loadActors() {
+      if (!householdId) return;
+      try {
+        const data = await listHouseholdActors(Number(householdId));
+        setActors(data);
+      } catch {
+        // Non-critical: the filter falls back to no options.
+      }
+    }
+
+    loadActors();
+  }, [householdId]);
 
   useEffect(() => {
     async function load() {
@@ -100,7 +113,10 @@ export function HouseholdActivities() {
           </h1>
           <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
             Histórico de operações em {currentHousehold?.name ?? 'sua despensa'}
-            {selectedMember ? ` — filtrando por ${selectedMember.name}` : ''}.
+            {selectedActor
+              ? ` — filtrando por ${selectedActor.name}${selectedActor.is_member ? '' : ' (ex-membro)'}`
+              : ''}
+            .
           </p>
         </div>
 
@@ -122,10 +138,11 @@ export function HouseholdActivities() {
             onChange={(e) => handleUserChange(e.target.value)}
             className="h-10 px-3 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
           >
-            <option value="">Todos os membros</option>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
+            <option value="">Todos os usuários</option>
+            {actors.map((actor) => (
+              <option key={actor.id} value={actor.id}>
+                {actor.name}
+                {actor.is_member ? '' : ' (ex-membro)'}
               </option>
             ))}
           </select>

@@ -70,6 +70,43 @@ it('exposes operations count in the current user payload', function () {
     expect($memberRow['operations_count'])->toBe(1);
 });
 
+it('lists actors including former members and is owner-only', function () {
+    [$owner, $member, $household] = householdWithMembers();
+    $former = User::factory()->create(['name' => 'Former']);
+    $household->users()->attach($former->id, ['role' => HouseholdRole::Member->value]);
+
+    $product = Product::create(['name' => 'Rice']);
+
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+        'created_by' => $former->id,
+        'updated_by' => $former->id,
+    ]);
+
+    // The former member leaves the household.
+    $household->users()->detach($former->id);
+
+    $this->actingAs($member, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/actors")
+        ->assertForbidden();
+
+    $response = $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/actors");
+
+    $response->assertOk();
+
+    $formerRow = collect($response->json('data'))->firstWhere('id', $former->id);
+    $ownerRow = collect($response->json('data'))->firstWhere('id', $owner->id);
+
+    expect($formerRow)->not->toBeNull()
+        ->and($formerRow['is_member'])->toBeFalse()
+        ->and($ownerRow['is_member'])->toBeTrue();
+});
+
 it('lists household activities with filters and is owner-only', function () {
     [$owner, $member, $household] = householdWithMembers();
     $rice = Product::create(['name' => 'Rice']);

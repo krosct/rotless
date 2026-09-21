@@ -34,6 +34,12 @@ export interface HouseholdMember {
   operations_count?: number;
 }
 
+export interface HouseholdActor {
+  id: number;
+  name: string;
+  is_member: boolean;
+}
+
 export interface MemberActivity {
   batch_id: number;
   product_name: string;

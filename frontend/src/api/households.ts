@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { HouseholdMember, MemberActivity } from '@/types';
+import { HouseholdActor, HouseholdMember, MemberActivity } from '@/types';
 
 interface DataEnvelope<T> {
   data: T;
@@ -15,6 +15,14 @@ function unwrap<T>(payload: T | DataEnvelope<T>): T {
 export async function listMembers(householdId: number): Promise<HouseholdMember[]> {
   const payload = await apiClient<HouseholdMember[] | DataEnvelope<HouseholdMember[]>>(
     `/api/v1/households/${householdId}/members`,
+    { method: 'GET' }
+  );
+  return unwrap(payload);
+}
+
+export async function listHouseholdActors(householdId: number): Promise<HouseholdActor[]> {
+  const payload = await apiClient<HouseholdActor[] | DataEnvelope<HouseholdActor[]>>(
+    `/api/v1/households/${householdId}/actors`,
     { method: 'GET' }
   );
   return unwrap(payload);

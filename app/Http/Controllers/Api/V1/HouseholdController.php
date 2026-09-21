@@ -42,6 +42,41 @@ final class HouseholdController extends Controller
         return response()->json(['data' => $members]);
     }
 
+    public function actors(Request $request, Household $household): JsonResponse
+    {
+        $this->authorize('manageMembers', $household);
+
+        $memberIds = $household->users()->pluck('users.id')->all();
+
+        $operatorIds = Batch::query()
+            ->where('household_id', $household->id)
+            ->where(function ($builder): void {
+                $builder->whereNotNull('created_by')->orWhereNotNull('updated_by');
+            })
+            ->get(['created_by', 'updated_by'])
+            ->flatMap(fn (Batch $batch): array => array_filter([$batch->created_by, $batch->updated_by]))
+            ->unique()
+            ->values()
+            ->all();
+
+        // Current members always appear; former members only if they operated.
+        $actorIds = array_values(array_unique([...$memberIds, ...$operatorIds]));
+
+        $actors = User::query()
+            ->whereIn('id', $actorIds)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'is_member' => in_array($user->id, $memberIds, true),
+            ])
+            ->values()
+            ->all();
+
+        return response()->json(['data' => $actors]);
+    }
+
     public function activities(Request $request, Household $household): JsonResponse
     {
         $this->authorize('manageMembers', $household);
