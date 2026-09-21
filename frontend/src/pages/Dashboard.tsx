@@ -15,6 +15,7 @@ import { BatchForm } from '@/components/batches/BatchForm';
 import { ConsumeBatchModal, ConsumeAction } from '@/components/batches/ConsumeBatchModal';
 import { ProductEditModal } from '@/components/batches/ProductEditModal';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ProductGroup, groupBatchesByProduct } from '@/utils/groupBatches';
 import { Bell, AlertTriangle, Sparkles } from 'lucide-react';
 import { expiryTone } from '@/utils/expiry';
@@ -34,6 +35,9 @@ export function Dashboard() {
     group: ProductGroup;
     action: ConsumeAction;
   } | null>(null);
+  const [batchToDelete, setBatchToDelete] = useState<{ id: number; productName: string } | null>(
+    null
+  );
 
   // Derive the group from fresh data so the edit modal reflects saved changes.
   const editingGroup = useMemo(
@@ -121,9 +125,16 @@ export function Dashboard() {
   };
 
   const handleDeleteBatch = (id: number) => {
-    if (window.confirm('Tem certeza que deseja remover este lote da despensa?')) {
-      deleteMutation.mutate(id);
-    }
+    const group = groupBatchesByProduct(batches).find((item) =>
+      item.entries.some((entry) => entry.batch.id === id)
+    );
+    setBatchToDelete({ id, productName: group?.product.name ?? 'este lote' });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!batchToDelete) return;
+    await deleteMutation.mutateAsync(batchToDelete.id);
+    setBatchToDelete(null);
   };
 
   // Urgent notice if active batches are expiring soon or expired
@@ -227,6 +238,17 @@ export function Dashboard() {
         isLoading={updateMutation.isPending}
         onClose={() => setConsumeTarget(null)}
         onConfirm={handleConsumeConfirm}
+      />
+
+      {/* Delete Batch Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={!!batchToDelete}
+        title="Remover lote"
+        description={`Tem certeza que deseja remover "${batchToDelete?.productName ?? 'este lote'}" da despensa? Esta ação não pode ser desfeita.`}
+        confirmLabel="Remover"
+        isLoading={deleteMutation.isPending}
+        onConfirm={handleConfirmDelete}
+        onClose={() => setBatchToDelete(null)}
       />
 
       <Footer />
