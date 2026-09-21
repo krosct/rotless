@@ -69,16 +69,20 @@ export function HouseholdSwitcher() {
             return (
               <div
                 key={household.id}
-                className="group/item flex items-center hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
+                className={`group/item flex items-center transition-colors ${
+                  isCurrent
+                    ? 'bg-stone-100 dark:bg-stone-800'
+                    : 'hover:bg-stone-50 dark:hover:bg-stone-800'
+                }`}
               >
                 <button
                   type="button"
                   role="option"
                   aria-selected={isCurrent}
                   onClick={() => handleSelect(household)}
-                  className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-all duration-150 group-hover/item:pl-4"
+                  className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors duration-150"
                 >
-                  <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0 transition-colors duration-150 group-hover/item:bg-emerald-50 dark:group-hover/item:bg-emerald-950/60 group-hover/item:text-[#2d6a4f] dark:group-hover/item:text-emerald-400">
+                  <span className="w-6 h-6 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0 transition-colors duration-150 group-hover/item:bg-stone-200 dark:group-hover/item:bg-stone-700 group-hover/item:text-stone-700 dark:group-hover/item:text-stone-200">
                     {own ? <Home className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
                   </span>
 
@@ -91,7 +95,7 @@ export function HouseholdSwitcher() {
                     </span>
                   </span>
 
-                  {isCurrent && <Check className="w-4 h-4 text-[#2d6a4f] dark:text-emerald-400 shrink-0" />}
+                  {isCurrent && <Check className="w-4 h-4 text-stone-500 dark:text-stone-300 shrink-0" />}
                 </button>
 
                 {own && (
