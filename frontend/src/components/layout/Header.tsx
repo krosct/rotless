@@ -1,0 +1,123 @@
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/Button';
+import {
+  Leaf,
+  LogOut,
+  Moon,
+  Sun,
+  Settings as SettingsIcon,
+  Home,
+  Plus,
+} from 'lucide-react';
+
+export interface HeaderProps {
+  onOpenNewBatchModal?: () => void;
+}
+
+export function Header({ onOpenNewBatchModal }: HeaderProps) {
+  const { user, currentHousehold, logout, theme, toggleTheme } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  return (
+    <header className="sticky top-0 z-30 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-b border-stone-200/80 dark:border-stone-800 transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        {/* Brand & Household */}
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl p-1"
+          >
+            <div className="w-9 h-9 rounded-xl bg-[#2d6a4f] text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+              <Leaf className="w-5 h-5 text-emerald-200" />
+            </div>
+            <span className="font-bold text-xl tracking-tight text-stone-900 dark:text-white">
+              rot<span className="text-[#2d6a4f] dark:text-emerald-400">less</span>
+            </span>
+          </Link>
+
+          {currentHousehold && (
+            <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#2d6a4f] dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 truncate max-w-[200px]">
+                {currentHousehold.name}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Right navigation actions */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Quick Add Batch Button on Desktop Header */}
+          {onOpenNewBatchModal && (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={onOpenNewBatchModal}
+              className="hidden md:inline-flex"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Adicionar Lote
+            </Button>
+          )}
+
+          {/* Navigation links */}
+          <Link
+            to="/dashboard"
+            className={`p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+              location.pathname === '/dashboard' ? 'bg-stone-100 dark:bg-stone-800 text-[#2d6a4f] dark:text-emerald-400' : ''
+            }`}
+            title="Dashboard"
+          >
+            <Home className="w-5 h-5" />
+            <span className="sr-only">Dashboard</span>
+          </Link>
+
+          <Link
+            to="/settings"
+            className={`p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+              location.pathname === '/settings' ? 'bg-stone-100 dark:bg-stone-800 text-[#2d6a4f] dark:text-emerald-400' : ''
+            }`}
+            title="Configurações e Membros"
+          >
+            <SettingsIcon className="w-5 h-5" />
+            <span className="sr-only">Configurações</span>
+          </Link>
+
+          {/* Theme Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Alternar modo escuro"
+            className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+          </button>
+
+          {/* User info & Logout */}
+          <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-stone-200 dark:border-stone-800">
+            {user && (
+              <span className="hidden lg:inline text-xs font-medium text-stone-600 dark:text-stone-400 truncate max-w-[120px]">
+                {user.name.split(' ')[0]}
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleLogout}
+              className="text-stone-600 dark:text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 px-2 sm:px-3"
+            >
+              <LogOut className="w-4 h-4 sm:mr-1.5" />
+              <span className="hidden sm:inline text-xs font-semibold">Sair</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
