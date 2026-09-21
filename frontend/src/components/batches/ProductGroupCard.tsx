@@ -15,7 +15,7 @@ import {
 
 export interface ProductGroupCardProps {
   group: ProductGroup;
-  onEdit?: (batchId: number) => void;
+  onEdit?: () => void;
   onConsume?: (group: ProductGroup, action: 'consumed' | 'discarded') => void;
   onDelete?: (batchId: number) => void;
 }
@@ -89,35 +89,40 @@ export function ProductGroupCard({ group, onEdit, onConsume, onDelete }: Product
           </div>
         </div>
 
-        {/* Entries list: one row per expiry date */}
+        {/* Entries list: one row per expiry date, scrollable after 3 entries */}
         <div className="flex flex-col gap-1.5 mb-4">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Entradas ({group.entries.length})
           </span>
 
-          {group.entries.map((entry) => {
-            const entryExpiry = getExpiryMeta(entry.expires_at);
-            return (
-              <div
-                key={entry.batch.id}
-                data-testid="product-entry"
-                className="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-stone-50 dark:bg-stone-950/60 border border-stone-100 dark:border-stone-800/80"
-              >
-                <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1.5 font-medium">
-                  <Calendar className="w-3.5 h-3.5 text-stone-400" />
-                  {formatDate(entry.expires_at)}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-stone-500 dark:text-stone-400">
-                    {entryExpiry.label}
+          <div
+            data-testid="product-entries-scroll"
+            className="flex flex-col gap-1.5 max-h-[7.5rem] overflow-y-auto pr-0.5"
+          >
+            {group.entries.map((entry) => {
+              const entryExpiry = getExpiryMeta(entry.expires_at);
+              return (
+                <div
+                  key={entry.batch.id}
+                  data-testid="product-entry"
+                  className="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-stone-50 dark:bg-stone-950/60 border border-stone-100 dark:border-stone-800/80 shrink-0"
+                >
+                  <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1.5 font-medium">
+                    <Calendar className="w-3.5 h-3.5 text-stone-400" />
+                    {formatDate(entry.expires_at)}
                   </span>
-                  <span className="font-semibold text-stone-800 dark:text-stone-200">
-                    {formatQuantity(entry.quantity)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                      {entryExpiry.label}
+                    </span>
+                    <span className="font-semibold text-stone-800 dark:text-stone-200">
+                      {formatQuantity(entry.quantity)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -153,8 +158,8 @@ export function ProductGroupCard({ group, onEdit, onConsume, onDelete }: Product
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onEdit(group.entries[0].batch.id)}
-              title="Editar lote"
+              onClick={onEdit}
+              title="Editar produto"
               className="h-8 px-2 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             >
               <Edit2 className="w-3.5 h-3.5" />

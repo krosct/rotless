@@ -54,8 +54,18 @@ export function groupBatchesByProduct(batches: Batch[]): ProductGroup[] {
     });
   }
 
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    entries: [...group.entries].sort((a, b) => a.expires_at.localeCompare(b.expires_at)),
-  }));
+  return Array.from(groups.values()).map((group) => {
+    const entries = [...group.entries].sort((a, b) => a.expires_at.localeCompare(b.expires_at));
+    const activeEntries = entries.filter((entry) => entry.batch.status === 'active');
+
+    return {
+      ...group,
+      entries,
+      // The group is active while any entry is still active; otherwise it
+      // reflects the status of the most recently resolved entry.
+      status: activeEntries.length > 0 ? 'active' : entries[entries.length - 1].batch.status,
+      totalQuantity: activeEntries.reduce((sum, entry) => sum + entry.quantity, 0),
+      earliestExpiresAt: activeEntries[0]?.expires_at ?? entries[0].expires_at,
+    };
+  });
 }

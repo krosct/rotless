@@ -251,6 +251,7 @@ export function BatchForm({
               <Input
                 label="Código de barras"
                 placeholder="Ex: 7891000100103"
+                autoFocus
                 {...register('barcode')}
                 error={errors.barcode?.message}
                 rightElement={

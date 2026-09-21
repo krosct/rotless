@@ -49,4 +49,29 @@ describe('groupBatchesByProduct', () => {
 
     expect(groups).toHaveLength(2);
   });
+
+  it('mantém o grupo ativo enquanto houver qualquer entrada ativa', () => {
+    const batches = [
+      makeBatch({ id: 1, productId: 10, status: 'consumed', expires_at: '2026-10-01' }),
+      makeBatch({ id: 2, productId: 10, status: 'active', expires_at: '2026-11-01' }),
+    ];
+
+    const groups = groupBatchesByProduct(batches);
+
+    expect(groups[0].status).toBe('active');
+    expect(groups[0].totalQuantity).toBe(1);
+    expect(groups[0].earliestExpiresAt).toBe('2026-11-01');
+  });
+
+  it('marca o grupo como consumido quando todas as entradas foram resolvidas', () => {
+    const batches = [
+      makeBatch({ id: 1, productId: 10, status: 'consumed', expires_at: '2026-10-01' }),
+      makeBatch({ id: 2, productId: 10, status: 'consumed', expires_at: '2026-11-01' }),
+    ];
+
+    const groups = groupBatchesByProduct(batches);
+
+    expect(groups[0].status).toBe('consumed');
+    expect(groups[0].totalQuantity).toBe(0);
+  });
 });
