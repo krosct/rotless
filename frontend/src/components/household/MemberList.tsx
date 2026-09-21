@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HouseholdMember, HouseholdRole } from '@/types';
 import { Badge } from '@/components/ui/Badge';
@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { InviteModal } from './InviteModal';
 import { removeMember, updateMemberRole } from '@/api/households';
 import { formatDate } from '@/utils/format';
-import { UserPlus, Users, Crown, Shield, Activity, Trash2, UserCog } from 'lucide-react';
+import { UserPlus, Users, Crown, Shield, Activity, Trash2, UserCog, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface MemberListProps {
@@ -37,7 +37,24 @@ export function MemberList({
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
+  const [roleMenuMemberId, setRoleMenuMemberId] = useState<number | null>(null);
+  const [roleChangeRequest, setRoleChangeRequest] = useState<{
+    member: HouseholdMember;
+    role: 'manager' | 'member';
+  } | null>(null);
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+  const roleMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
+        setRoleMenuMemberId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleConfirmRemove = async () => {
     if (!memberToRemove) return;
@@ -56,17 +73,22 @@ export function MemberList({
     }
   };
 
-  const handleRoleChange = async (member: HouseholdMember, role: 'manager' | 'member') => {
-    setUpdatingRoleId(member.id);
+  const handleConfirmRoleChange = async () => {
+    if (!roleChangeRequest) return;
+
+    setIsUpdatingRole(true);
     try {
-      await updateMemberRole(householdId, member.id, role);
-      toast.success(`${member.name} agora é ${roleLabels[role].toLowerCase()}.`);
+      await updateMemberRole(householdId, roleChangeRequest.member.id, roleChangeRequest.role);
+      toast.success(
+        `${roleChangeRequest.member.name} agora é ${roleLabels[roleChangeRequest.role].toLowerCase()}.`
+      );
+      setRoleChangeRequest(null);
       if (onRefresh) onRefresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao atualizar o papel do membro.';
       toast.error(msg);
     } finally {
-      setUpdatingRoleId(null);
+      setIsUpdatingRole(false);
     }
   };
 
@@ -139,50 +161,96 @@ export function MemberList({
                   </button>
                 )}
 
-                <Badge variant={member.role} size="sm">
-                  {isMemberOwner ? (
-                    <>
-                      <Crown className="w-3 h-3 text-amber-500" />
-                      {roleLabels.owner}
-                    </>
-                  ) : member.role === 'manager' ? (
-                    <>
-                      <UserCog className="w-3 h-3 text-sky-500" />
-                      {roleLabels.manager}
-                    </>
-                  ) : (
-                    <>
-                      <Shield className="w-3 h-3 text-stone-400" />
-                      {roleLabels.member}
-                    </>
-                  )}
-                </Badge>
+                {canRemoveMembers && !isMemberOwner ? (
+                  <div ref={roleMenuMemberId === member.id ? roleMenuRef : undefined} className="relative">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRoleMenuMemberId((prev) => (prev === member.id ? null : member.id))
+                      }
+                      aria-haspopup="listbox"
+                      aria-expanded={roleMenuMemberId === member.id}
+                      title="Alterar papel do membro"
+                      className="inline-flex items-center gap-1 rounded-full transition-transform duration-150 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f]"
+                    >
+                      <Badge variant={member.role} size="sm">
+                        {member.role === 'manager' ? (
+                          <>
+                            <UserCog className="w-3 h-3 text-sky-500" />
+                            {roleLabels.manager}
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="w-3 h-3 text-stone-400" />
+                            {roleLabels.member}
+                          </>
+                        )}
+                        <ChevronDown className="w-3 h-3 opacity-60" />
+                      </Badge>
+                    </button>
+
+                    {roleMenuMemberId === member.id && (
+                      <div
+                        role="listbox"
+                        className="absolute right-0 top-full mt-1.5 w-36 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl shadow-xl overflow-hidden z-40"
+                      >
+                        {(['member', 'manager'] as const).map((role) => (
+                          <button
+                            key={role}
+                            type="button"
+                            role="option"
+                            aria-selected={member.role === role}
+                            onClick={() => {
+                              setRoleMenuMemberId(null);
+                              if (member.role !== role) {
+                                setRoleChangeRequest({ member, role });
+                              }
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
+                          >
+                            {role === 'manager' ? (
+                              <UserCog className="w-3.5 h-3.5 text-sky-500" />
+                            ) : (
+                              <Shield className="w-3.5 h-3.5 text-stone-400" />
+                            )}
+                            {roleLabels[role]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Badge variant={member.role} size="sm">
+                    {isMemberOwner ? (
+                      <>
+                        <Crown className="w-3 h-3 text-amber-500" />
+                        {roleLabels.owner}
+                      </>
+                    ) : member.role === 'manager' ? (
+                      <>
+                        <UserCog className="w-3 h-3 text-sky-500" />
+                        {roleLabels.manager}
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-3 h-3 text-stone-400" />
+                        {roleLabels.member}
+                      </>
+                    )}
+                  </Badge>
+                )}
 
                 {canRemoveMembers && !isMemberOwner && (
-                  <>
-                    <select
-                      value={member.role}
-                      onChange={(e) => handleRoleChange(member, e.target.value as 'manager' | 'member')}
-                      disabled={updatingRoleId === member.id}
-                      title="Alterar papel do membro"
-                      aria-label={`Papel de ${member.name}`}
-                      className="h-8 px-2 text-xs rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f] disabled:opacity-50"
-                    >
-                      <option value="member">Membro</option>
-                      <option value="manager">Gerente</option>
-                    </select>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMemberToRemove(member)}
-                      title="Remover membro"
-                      className="h-8 px-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span className="sr-only">Remover</span>
-                    </Button>
-                  </>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMemberToRemove(member)}
+                    title="Remover membro"
+                    className="h-8 px-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="sr-only">Remover</span>
+                  </Button>
                 )}
               </div>
             </div>
@@ -206,6 +274,18 @@ export function MemberList({
         isLoading={isRemoving}
         onConfirm={handleConfirmRemove}
         onClose={() => setMemberToRemove(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!roleChangeRequest}
+        title="Alterar papel do membro"
+        description={`Tem certeza que deseja tornar ${roleChangeRequest?.member.name ?? 'este membro'} ${
+          roleChangeRequest ? roleLabels[roleChangeRequest.role].toLowerCase() : ''
+        }?`}
+        confirmLabel="Confirmar"
+        isLoading={isUpdatingRole}
+        onConfirm={handleConfirmRoleChange}
+        onClose={() => setRoleChangeRequest(null)}
       />
     </div>
   );
