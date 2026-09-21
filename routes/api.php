@@ -10,14 +10,18 @@ Route::get('/v1/health', HealthController::class);
 
 Route::post('/v1/register', [AuthController::class, 'register']);
 Route::post('/v1/login', [AuthController::class, 'login']);
+Route::get('/v1/invitations/info/{token}', [InvitationController::class, 'info']);
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/v1/logout', [AuthController::class, 'logout']);
+    Route::get('/v1/me', [AuthController::class, 'me']);
+    Route::patch('/v1/user/profile', [AuthController::class, 'updateProfile']);
     Route::get('/v1/batches', [BatchController::class, 'index']);
     Route::post('/v1/batches', [BatchController::class, 'store']);
     Route::get('/v1/batches/{batch}', [BatchController::class, 'show']);
     Route::patch('/v1/batches/{batch}', [BatchController::class, 'update']);
     Route::delete('/v1/batches/{batch}', [BatchController::class, 'destroy']);
+    Route::get('/v1/openfoodfacts/{barcode}', [BatchController::class, 'lookupBarcode']);
     Route::post('/v1/households/{household}/invitations', [InvitationController::class, 'store']);
     Route::post('/v1/invitations/accept', [InvitationController::class, 'accept']);
 });

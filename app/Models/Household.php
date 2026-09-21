@@ -7,7 +7,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
+/**
+ * @property Pivot $pivot
+ */
 final class Household extends Model
 {
     protected $fillable = ['name'];

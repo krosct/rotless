@@ -8,8 +8,10 @@ use App\Enums\HouseholdRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\UpdateProfileRequest;
 use App\Models\Household;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,12 +41,7 @@ final class AuthController extends Controller
         $token = $user->createToken('auth')->plainTextToken;
 
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'households' => $user->households()->get(['households.id', 'households.name']),
-            ],
+            'user' => $this->serializeUser($user),
             'token' => $token,
         ], 201);
     }
@@ -62,8 +59,29 @@ final class AuthController extends Controller
         $token = $user->createToken('auth')->plainTextToken;
 
         return response()->json([
-            'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+            'user' => $this->serializeUser($user),
             'token' => $token,
+        ]);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $user->load('households');
+
+        return response()->json([
+            'user' => $this->serializeUser($user),
+        ]);
+    }
+
+    public function updateProfile(UpdateProfileRequest $request, Request $httpRequest): JsonResponse
+    {
+        $user = $httpRequest->user();
+        $user->update($request->only(['name', 'telegram_chat_id']));
+
+        return response()->json([
+            'user' => $this->serializeUser($user->fresh()->load('households')),
+            'message' => 'Profile updated successfully.',
         ]);
     }
 
@@ -72,5 +90,29 @@ final class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out.']);
+    }
+
+    /** @return array<string, mixed> */
+    private function serializeUser(User $user): array
+    {
+        $households = $user->households->map(function ($household) {
+            /** @var Pivot $pivot */
+            $pivot = $household->getAttribute('pivot');
+
+            return [
+                'id' => $household->id,
+                'name' => $household->name,
+                'is_owner' => $pivot->getAttribute('role') === HouseholdRole::Owner->value,
+                'role' => $pivot->getAttribute('role'),
+            ];
+        })->values()->all();
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'telegram_chat_id' => $user->telegram_chat_id,
+            'households' => $households,
+        ];
     }
 }
