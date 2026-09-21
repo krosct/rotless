@@ -103,12 +103,56 @@ describe('AuthForm component', () => {
 
     await user.type(screen.getByLabelText(/Nome completo/i), 'Ana Silva');
     await user.type(screen.getByLabelText(/E-mail/i), 'ana@rotless.dev');
-    await user.type(screen.getByLabelText(/Senha/i), 'short12');
+    await user.type(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'short12');
     await user.click(screen.getByRole('button', { name: /Criar Minha Despensa/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/pelo menos 8 caracteres/i)).toBeDefined();
     });
     expect(registerSpy).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia o cadastro quando as senhas não coincidem', async () => {
+    const user = userEvent.setup();
+    const registerSpy = vi.spyOn(authApi, 'register');
+
+    renderWithProviders(<AuthForm defaultMode="register" />);
+
+    await user.type(screen.getByLabelText(/Nome completo/i), 'Ana Silva');
+    await user.type(screen.getByLabelText(/E-mail/i), 'ana@rotless.dev');
+    await user.type(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password123');
+    await user.type(screen.getByLabelText(/Confirmar senha/i), 'password999');
+    await user.click(screen.getByRole('button', { name: /Criar Minha Despensa/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/As senhas não coincidem/i)).toBeDefined();
+    });
+    expect(registerSpy).not.toHaveBeenCalled();
+  });
+
+  it('envia o cadastro quando as senhas coincidem', async () => {
+    const user = userEvent.setup();
+    const registerSpy = vi
+      .spyOn(authApi, 'register')
+      .mockResolvedValueOnce({
+        user: { id: 1, name: 'Ana Silva', email: 'ana@rotless.dev' },
+        token: 'token_abc',
+      });
+
+    renderWithProviders(<AuthForm defaultMode="register" />);
+
+    await user.type(screen.getByLabelText(/Nome completo/i), 'Ana Silva');
+    await user.type(screen.getByLabelText(/E-mail/i), 'ana@rotless.dev');
+    await user.type(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password123');
+    await user.type(screen.getByLabelText(/Confirmar senha/i), 'password123');
+    await user.click(screen.getByRole('button', { name: /Criar Minha Despensa/i }));
+
+    await waitFor(() => {
+      expect(registerSpy).toHaveBeenCalledWith({
+        name: 'Ana Silva',
+        email: 'ana@rotless.dev',
+        password: 'password123',
+      });
+    });
   });
 });

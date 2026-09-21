@@ -15,11 +15,17 @@ const loginSchema = z.object({
   password: z.string().min(1, 'A senha é obrigatória'),
 });
 
-const registerSchema = z.object({
-  name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
-  email: z.string().min(1, 'O e-mail é obrigatório').email('E-mail em formato inválido'),
-  password: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres'),
-});
+const registerSchema = z
+  .object({
+    name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
+    email: z.string().min(1, 'O e-mail é obrigatório').email('E-mail em formato inválido'),
+    password: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres'),
+    password_confirmation: z.string().min(1, 'Confirme a senha'),
+  })
+  .refine((data) => data.password === data.password_confirmation, {
+    path: ['password_confirmation'],
+    message: 'As senhas não coincidem',
+  });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -43,7 +49,7 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
   // Register form instance
   const registerForm = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { name: '', email: '', password: '', password_confirmation: '' },
   });
 
   const handleTabChange = (id: string) => {
@@ -77,7 +83,11 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
   const handleRegisterSubmit = async (data: RegisterFormData) => {
     setGlobalError(null);
     try {
-      await registerUser(data);
+      await registerUser({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+      });
       toast.success('Cadastro criado com sucesso! Bem-vindo ao rotless.');
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
@@ -201,6 +211,17 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
             helperText="Sua senha será protegida com hash seguro."
             {...registerForm.register('password')}
             error={registerForm.formState.errors.password?.message}
+          />
+
+          <Input
+            label="Confirmar senha"
+            type="password"
+            placeholder="Digite a senha novamente"
+            autoComplete="new-password"
+            required
+            leftIcon={<Lock className="w-4 h-4" />}
+            {...registerForm.register('password_confirmation')}
+            error={registerForm.formState.errors.password_confirmation?.message}
           />
 
           <Button
