@@ -24,7 +24,7 @@ export function Badge({ className, variant = 'neutral', size = 'sm', children, .
     consumed:
       'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
     discarded:
-      'bg-stone-100 text-stone-600 border-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:border-stone-700 line-through',
+      'bg-stone-100 text-stone-600 border-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:border-stone-700',
 
     // Household roles
     owner:

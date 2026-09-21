@@ -230,15 +230,13 @@ export function HouseholdActivities() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant={activity.status} size="sm">
-                        {activity.status === 'active'
-                          ? 'Ativo'
-                          : activity.status === 'consumed'
-                          ? 'Consumido'
-                          : 'Descartado'}
-                      </Badge>
-                    </div>
+                    {activity.status !== 'active' && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge variant={activity.status} size="sm">
+                          {activity.status === 'consumed' ? 'Consumido' : 'Descartado'}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

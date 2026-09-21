@@ -23,11 +23,16 @@ final class BatchController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $batches = Batch::query()
+        $query = Batch::query()
             ->with(['product', 'creator', 'updater'])
-            ->whereHas('household', fn ($query) => $query->whereHas('users', fn ($users) => $users->whereKey($request->user()->id)))
-            ->orderBy('expires_at')
-            ->get();
+            ->whereHas('household', fn ($builder) => $builder->whereHas('users', fn ($users) => $users->whereKey($request->user()->id)));
+
+        if ($request->filled('household_id')) {
+            $householdId = $request->integer('household_id');
+            $query->where('household_id', $householdId);
+        }
+
+        $batches = $query->orderBy('expires_at')->get();
 
         return response()->json([
             'data' => $batches->map(fn (Batch $batch): array => $this->serialize($batch)),

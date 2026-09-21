@@ -32,6 +32,42 @@ function fakeOpenFoodFacts(string $barcode, string $name): void
     ]);
 }
 
+it('filters batches by household_id', function () {
+    [$user, $household] = memberHousehold();
+    $otherHousehold = Household::create(['name' => 'Other']);
+    $otherHousehold->users()->attach($user->id, ['role' => HouseholdRole::Member->value]);
+
+    $product = Product::create(['name' => 'Rice']);
+
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+    ]);
+
+    Batch::create([
+        'household_id' => $otherHousehold->id,
+        'product_id' => $product->id,
+        'quantity' => 9,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+    ]);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson("/api/v1/batches?household_id={$household->id}")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.quantity', 1);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson("/api/v1/batches?household_id={$otherHousehold->id}")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.quantity', 9);
+});
+
 it('creates a batch from a barcode via openfoodfacts and caches the product', function () {
     [$user, $household] = memberHousehold();
     fakeOpenFoodFacts('3017620422003', 'Nutella');
