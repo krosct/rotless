@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Batch } from '@/types';
 import { ProductGroupCard } from './ProductGroupCard';
+import { BatchHistoryTable } from './BatchHistoryTable';
 import { Button } from '@/components/ui/Button';
 import { groupBatchesByProduct, ProductGroup } from '@/utils/groupBatches';
 import { expiryTone } from '@/utils/expiry';
@@ -59,10 +60,7 @@ export function BatchList({
     let consumed = 0;
 
     groups.forEach((group) => {
-      if (group.entries.length === 0) {
-        consumed++;
-        return;
-      }
+      if (group.entries.length === 0) return;
 
       active++;
       const tone = expiryTone(group.entries[0].expires_at);
@@ -70,20 +68,34 @@ export function BatchList({
       if (tone === 'overdue') overdue++;
     });
 
+    // History counts every resolved batch (consumed or discarded).
+    consumed = batches.filter((batch) => batch.status !== 'active').length;
+
     return { all: groups.length, active, soon, overdue, consumed };
-  }, [groups]);
+  }, [groups, batches]);
+
+  const matchesSearch = (batch: Batch) =>
+    batch.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (batch.product.barcode ? batch.product.barcode.includes(searchTerm) : false);
 
   const filteredGroups = useMemo(() => {
     return groups.filter((group) => {
-      const matchesSearch =
+      const groupMatchesSearch =
         group.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (group.product.barcode && group.product.barcode.includes(searchTerm));
 
-      if (!matchesSearch) return false;
+      if (!groupMatchesSearch) return false;
 
       return groupMatchesFilter(group, filter);
     });
   }, [groups, searchTerm, filter]);
+
+  const historyBatches = useMemo(() => {
+    return batches
+      .filter((batch) => matchesSearch(batch))
+      .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batches, searchTerm]);
 
   if (isLoading) {
     return (
@@ -181,8 +193,10 @@ export function BatchList({
         </div>
       </div>
 
-      {/* Empty State */}
-      {filteredGroups.length === 0 ? (
+      {/* History table */}
+      {filter === 'consumed' ? (
+        <BatchHistoryTable batches={historyBatches} />
+      ) : filteredGroups.length === 0 ? (
         <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-8 sm:p-12 flex flex-col items-center justify-center text-center shadow-xs">
           <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center text-[#2d6a4f] dark:text-emerald-400 mb-4">
             <PackageOpen className="w-8 h-8" />
