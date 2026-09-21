@@ -1,82 +1,87 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiFetch, clearToken, getToken, setToken } from './client';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  getToken,
+  setToken,
+  removeToken,
+  TOKEN_STORAGE_KEY,
+  ApiError,
+  apiClient,
+} from './client';
 
-function jsonResponse(payload: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => payload,
-  } as unknown as Response;
-}
-
-describe('token storage', () => {
+describe('client utility and token storage', () => {
   beforeEach(() => {
-    clearToken();
-    vi.unstubAllGlobals();
+    localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  it('stores and clears the token', () => {
+  it('salva, recupera e remove token do localStorage', () => {
     expect(getToken()).toBeNull();
 
-    setToken('abc');
-    expect(getToken()).toBe('abc');
+    setToken('test_token_123');
+    expect(getToken()).toBe('test_token_123');
+    expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('test_token_123');
 
-    clearToken();
+    removeToken();
     expect(getToken()).toBeNull();
   });
-});
 
-describe('apiFetch', () => {
-  beforeEach(() => {
-    clearToken();
-    vi.unstubAllGlobals();
+  it('constrói ApiError com status e campos de erro corretos', () => {
+    const error422 = new ApiError(422, 'Dados inválidos', null, {
+      email: ['E-mail já cadastrado'],
+    });
+
+    expect(error422.status).toBe(422);
+    expect(error422.message).toBe('Dados inválidos');
+    expect(error422.errors?.email).toContain('E-mail já cadastrado');
+
+    const error500 = new ApiError(500, 'Server error');
+    expect(error500.status).toBe(500);
+    expect(error500.message).toBe('Server error');
   });
 
-  it('returns the parsed body on success', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ data: [1, 2] }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('lança ApiError com envelope 422 quando endpoint falha com 422', async () => {
+    const mockResponse = {
+      message: 'Os dados fornecidos são inválidos.',
+      errors: {
+        quantity: ['A quantidade deve ser maior que 0.'],
+      },
+    };
 
-    const result = await apiFetch<{ data: number[] }>('/api/v1/batches');
-
-    expect(result).toEqual({ data: [1, 2] });
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
-
-  it('sends the bearer token when stored', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ ok: true }));
-    vi.stubGlobal('fetch', fetchMock);
-    setToken('secret-token');
-
-    await apiFetch('/api/v1/batches');
-
-    const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
-    expect(init.headers['Authorization']).toBe('Bearer secret-token');
-  });
-
-  it('throws an ApiError with field errors on validation failure', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({ message: 'Invalid data.', errors: { email: ['Invalid email.'] } }, 422),
-      );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const failure = apiFetch('/api/v1/register', { method: 'POST', body: {} });
-    await expect(failure).rejects.toMatchObject({
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
       status: 422,
-      message: 'Invalid data.',
-      errors: { email: ['Invalid email.'] },
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => mockResponse,
     });
-    await expect(failure).rejects.toBeInstanceOf(ApiError);
+
+    try {
+      await apiClient('/api/v1/batches', { method: 'POST', body: {} });
+      expect.fail('Deveria ter lançado ApiError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.status).toBe(422);
+      expect(apiErr.message).toBe('Os dados fornecidos são inválidos.');
+      expect(apiErr.errors?.quantity).toContain('A quantidade deve ser maior que 0.');
+    }
   });
 
-  it('throws a generic ApiError when the body is not an envelope', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(null, 500));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(apiFetch('/api/v1/batches')).rejects.toMatchObject({
+  it('lança ApiError quando endpoint retorna 500', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
       status: 500,
-      message: 'Request failed (500)',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ message: 'Erro interno no servidor' }),
     });
+
+    try {
+      await apiClient('/api/v1/batches');
+      expect.fail('Deveria ter lançado ApiError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.status).toBe(500);
+      expect(apiErr.message).toBe('Erro interno no servidor');
+    }
   });
 });

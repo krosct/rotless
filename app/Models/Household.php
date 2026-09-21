@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\HouseholdRole;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
+/**
+ * @property Pivot $pivot
+ */
 final class Household extends Model
 {
     protected $fillable = ['name'];
@@ -30,5 +35,14 @@ final class Household extends Model
     public function invitations(): HasMany
     {
         return $this->hasMany(HouseholdInvitation::class);
+    }
+
+    public function roleOf(User $user): ?HouseholdRole
+    {
+        $role = $this->users()
+            ->whereKey($user->id)
+            ->value('role');
+
+        return $role === null ? null : HouseholdRole::from($role);
     }
 }

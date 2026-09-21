@@ -15,6 +15,7 @@ use App\Services\OpenFoodFactsClient;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 final class BatchController extends Controller
 {
@@ -22,11 +23,16 @@ final class BatchController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $batches = Batch::query()
-            ->with('product')
-            ->whereHas('household', fn ($query) => $query->whereHas('users', fn ($users) => $users->whereKey($request->user()->id)))
-            ->orderBy('expires_at')
-            ->get();
+        $query = Batch::query()
+            ->with(['product', 'creator', 'updater'])
+            ->whereHas('household', fn ($builder) => $builder->whereHas('users', fn ($users) => $users->whereKey($request->user()->id)));
+
+        if ($request->filled('household_id')) {
+            $householdId = $request->integer('household_id');
+            $query->where('household_id', $householdId);
+        }
+
+        $batches = $query->orderBy('expires_at')->get();
 
         return response()->json([
             'data' => $batches->map(fn (Batch $batch): array => $this->serialize($batch)),
@@ -50,25 +56,30 @@ final class BatchController extends Controller
             'quantity' => $request->integer('quantity', 1),
             'expires_at' => $request->date('expires_at'),
             'status' => BatchStatus::Active,
+            'created_by' => $request->user()->id,
+            'updated_by' => $request->user()->id,
         ]);
 
-        return response()->json(['data' => $this->serialize($batch->load('product'))], 201);
+        return response()->json(['data' => $this->serialize($batch->load(['product', 'creator', 'updater']))], 201);
     }
 
     public function show(Batch $batch): JsonResponse
     {
         $this->authorize('view', $batch);
 
-        return response()->json(['data' => $this->serialize($batch->load('product'))]);
+        return response()->json(['data' => $this->serialize($batch->load(['product', 'creator', 'updater']))]);
     }
 
     public function update(UpdateBatchRequest $request, Batch $batch): JsonResponse
     {
         $this->authorize('update', $batch);
 
-        $batch->update($request->only(['quantity', 'expires_at', 'status']));
+        $batch->update([
+            ...$request->only(['quantity', 'expires_at', 'status']),
+            'updated_by' => $request->user()->id,
+        ]);
 
-        return response()->json(['data' => $this->serialize($batch->fresh('product'))]);
+        return response()->json(['data' => $this->serialize($batch->fresh(['product', 'creator', 'updater']))]);
     }
 
     public function destroy(Batch $batch): JsonResponse
@@ -78,6 +89,25 @@ final class BatchController extends Controller
         $batch->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function lookupBarcode(Request $request, string $barcode): JsonResponse
+    {
+        $data = OpenFoodFactsClient::fromConfig()->findByBarcode($barcode);
+
+        if ($data === null) {
+            return response()->json([
+                'name' => null,
+                'photo_url' => null,
+                'barcode' => $barcode,
+            ]);
+        }
+
+        return response()->json([
+            'name' => $data['product_name'] ?? $barcode,
+            'photo_url' => $data['image_url'] ?? null,
+            'barcode' => $barcode,
+        ]);
     }
 
     private function resolveProduct(StoreBatchRequest $request): ?Product
@@ -115,10 +145,27 @@ final class BatchController extends Controller
     {
         return [
             'id' => $batch->id,
-            'product' => ['id' => $batch->product->id, 'name' => $batch->product->name],
+            'product' => [
+                'id' => $batch->product->id,
+                'name' => $batch->product->name,
+                'barcode' => $batch->product->barcode,
+                'photo_url' => $batch->product->photo_path === null
+                    ? null
+                    : Storage::disk('public')->url($batch->product->photo_path),
+            ],
             'quantity' => $batch->quantity,
             'expires_at' => $batch->expires_at->toDateString(),
             'status' => $batch->status->value,
+            'created_at' => $batch->created_at?->toIso8601String(),
+            'updated_at' => $batch->updated_at?->toIso8601String(),
+            'created_by' => $batch->creator === null ? null : [
+                'id' => $batch->creator->id,
+                'name' => $batch->creator->name,
+            ],
+            'updated_by' => $batch->updater === null ? null : [
+                'id' => $batch->updater->id,
+                'name' => $batch->updater->name,
+            ],
         ];
     }
 }

@@ -13,6 +13,7 @@ use App\Models\Household;
 use App\Models\HouseholdInvitation;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -37,13 +38,40 @@ final class InvitationController extends Controller
         ]);
 
         return response()->json([
-            'data' => [
-                'id' => $invitation->id,
-                'email' => $invitation->email,
+            'message' => 'Invitation created.',
+            'invitation' => [
                 'token' => $invitation->token,
+                'email' => $invitation->email,
+                'household_name' => $household->name,
+                'invite_url' => url("/invite/{$invitation->token}"),
                 'expires_at' => $invitation->expires_at->toDateTimeString(),
             ],
         ], 201);
+    }
+
+    public function info(Request $request, string $token): JsonResponse
+    {
+        $invitation = HouseholdInvitation::where('token', $token)->firstOrFail();
+
+        $user = $request->user('sanctum');
+        $isMember = $user !== null
+            && $invitation->household->users()->whereKey($user->id)->exists();
+        $isInvited = $user !== null && $user->email === $invitation->email;
+
+        $state = match (true) {
+            $isMember => 'already_member',
+            $isInvited => 'invited',
+            default => 'not_invited',
+        };
+
+        return response()->json([
+            'token' => $invitation->token,
+            'email' => $invitation->email,
+            'household_id' => $invitation->household_id,
+            'household_name' => $invitation->household->name,
+            'expires_at' => $invitation->expires_at->toDateTimeString(),
+            'state' => $state,
+        ]);
     }
 
     public function accept(AcceptInvitationRequest $request): JsonResponse
@@ -61,9 +89,11 @@ final class InvitationController extends Controller
         });
 
         return response()->json([
-            'data' => [
-                'household_id' => $invitation->household_id,
-                'household_name' => $invitation->household->name,
+            'message' => 'Invitation accepted.',
+            'household' => [
+                'id' => $invitation->household_id,
+                'name' => $invitation->household->name,
+                'role' => 'member',
             ],
         ]);
     }

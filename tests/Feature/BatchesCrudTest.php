@@ -32,6 +32,42 @@ function fakeOpenFoodFacts(string $barcode, string $name): void
     ]);
 }
 
+it('filters batches by household_id', function () {
+    [$user, $household] = memberHousehold();
+    $otherHousehold = Household::create(['name' => 'Other']);
+    $otherHousehold->users()->attach($user->id, ['role' => HouseholdRole::Member->value]);
+
+    $product = Product::create(['name' => 'Rice']);
+
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+    ]);
+
+    Batch::create([
+        'household_id' => $otherHousehold->id,
+        'product_id' => $product->id,
+        'quantity' => 9,
+        'expires_at' => now()->addDays(5)->toDateString(),
+        'status' => BatchStatus::Active,
+    ]);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson("/api/v1/batches?household_id={$household->id}")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.quantity', 1);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson("/api/v1/batches?household_id={$otherHousehold->id}")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.quantity', 9);
+});
+
 it('creates a batch from a barcode via openfoodfacts and caches the product', function () {
     [$user, $household] = memberHousehold();
     fakeOpenFoodFacts('3017620422003', 'Nutella');
@@ -122,6 +158,68 @@ it('forbids creating batches in other households', function () {
         'name' => 'Sneaky item',
         'expires_at' => now()->addDays(7)->toDateString(),
     ])->assertForbidden();
+});
+
+it('records who created and who last updated a batch', function () {
+    [$creator, $household] = memberHousehold();
+    $editor = User::factory()->create();
+    $household->users()->attach($editor->id, ['role' => HouseholdRole::Member->value]);
+
+    $created = $this->actingAs($creator, 'sanctum')->postJson('/api/v1/batches', [
+        'household_id' => $household->id,
+        'name' => 'Coffee',
+        'quantity' => 2,
+        'expires_at' => now()->addDays(20)->toDateString(),
+    ]);
+
+    $created->assertCreated()
+        ->assertJsonPath('data.created_by.id', $creator->id)
+        ->assertJsonPath('data.created_by.name', $creator->name)
+        ->assertJsonPath('data.updated_by.id', $creator->id);
+
+    $batchId = $created->json('data.id');
+
+    $this->actingAs($editor, 'sanctum')->patchJson("/api/v1/batches/{$batchId}", [
+        'quantity' => 1,
+    ])->assertOk()
+        ->assertJsonPath('data.created_by.id', $creator->id)
+        ->assertJsonPath('data.updated_by.id', $editor->id);
+
+    $batch = Batch::find($batchId);
+    expect($batch->created_by)->toBe($creator->id)
+        ->and($batch->updated_by)->toBe($editor->id)
+        ->and($batch->created_at)->not->toBeNull();
+});
+
+it('updates a product name and photo for household members only', function () {
+    [$user, $household] = memberHousehold();
+    $outsider = User::factory()->create();
+    Storage::fake('public');
+
+    $product = Product::create(['name' => 'Old name']);
+    Batch::create([
+        'household_id' => $household->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'expires_at' => now()->addDays(10)->toDateString(),
+        'status' => BatchStatus::Active,
+    ]);
+
+    $this->actingAs($outsider, 'sanctum')->patchJson("/api/v1/products/{$product->id}", [
+        'name' => 'Hacked',
+    ])->assertForbidden();
+
+    $response = $this->actingAs($user, 'sanctum')->patch("/api/v1/products/{$product->id}", [
+        'name' => 'New name',
+        'photo' => UploadedFile::fake()->image('product.jpg'),
+    ]);
+
+    $response->assertOk()->assertJsonPath('data.name', 'New name');
+
+    $product->refresh();
+    expect($product->name)->toBe('New name')
+        ->and($product->photo_path)->not->toBeNull();
+    Storage::disk('public')->assertExists($product->photo_path);
 });
 
 it('shows, updates and deletes a batch with policy checks', function () {

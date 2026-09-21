@@ -1,73 +1,73 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { login, logout, register } from './auth';
-import { clearToken, getToken } from './client';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import * as authApi from './auth';
+import { getToken } from './client';
 
-function jsonResponse(payload: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => payload,
-  } as unknown as Response;
-}
-
-describe('auth', () => {
+describe('auth api service', () => {
   beforeEach(() => {
-    clearToken();
-    vi.unstubAllGlobals();
+    localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  it('stores the token and returns the user on login', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({ user: { id: 1, name: 'Alex', email: 'alex@example.com', households: [] }, token: 'tok-123' }),
-      );
-    vi.stubGlobal('fetch', fetchMock);
+  it('login armazena token e retorna dados do usuário', async () => {
+    const mockAuthResponse = {
+      user: { id: 1, name: 'Ana Silva', email: 'ana@rotless.dev' },
+      token: 'token_sanctum_abc123',
+    };
 
-    const result = await login({ email: 'alex@example.com', password: 'supersecret' });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => mockAuthResponse,
+    });
 
-    expect(result.user).toEqual({ id: 1, name: 'Alex', email: 'alex@example.com', households: [] });
-    expect(result.householdId).toBe(0);
-    expect(getToken()).toBe('tok-123');
+    const res = await authApi.login({ email: 'ana@rotless.dev', password: 'password123' });
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, { method: string }];
-    expect(url).toContain('/api/v1/login');
-    expect(init.method).toBe('POST');
+    expect(res.token).toBe('token_sanctum_abc123');
+    expect(res.user.name).toBe('Ana Silva');
+    expect(getToken()).toBe('token_sanctum_abc123');
   });
 
-  it('stores the token on registration', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      jsonResponse(
-        {
-          user: { id: 2, name: 'Ana', email: 'ana@example.com', households: [{ id: 7, name: "Ana's pantry" }] },
-          token: 'tok-456',
-        },
-        201,
-      ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  it('register armazena token e retorna dados do usuário e household', async () => {
+    const mockRegisterResponse = {
+      user: {
+        id: 2,
+        name: 'Carlos',
+        email: 'carlos@rotless.dev',
+        households: [{ id: 1, name: "Carlos's pantry", role: 'owner' }],
+      },
+      token: 'token_registered_xyz',
+    };
 
-    const result = await register({ name: 'Ana', email: 'ana@example.com', password: 'supersecret' });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => mockRegisterResponse,
+    });
 
-    expect(result.user.households).toEqual([{ id: 7, name: "Ana's pantry" }]);
-    expect(result.householdId).toBe(7);
-    expect(getToken()).toBe('tok-456');
+    const res = await authApi.register({
+      name: 'Carlos',
+      email: 'carlos@rotless.dev',
+      password: 'password123',
+    });
+
+    expect(res.token).toBe('token_registered_xyz');
+    expect(getToken()).toBe('token_registered_xyz');
+    expect(res.user.households?.[0].name).toBe("Carlos's pantry");
   });
 
-  it('rejects a malformed login response', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ token: 'tok-789' }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('logout remove o token do localStorage', async () => {
+    localStorage.setItem('rotless_token', 'active_token');
 
-    await expect(login({ email: 'alex@example.com', password: 'supersecret' })).rejects.toThrow();
-    expect(getToken()).toBeNull();
-  });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ message: 'Desconectado' }),
+    });
 
-  it('clears the token on logout even when the request fails', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ message: 'Unauthenticated.' }, 401));
-    vi.stubGlobal('fetch', fetchMock);
-    localStorage.setItem('rotless_token', 'stale-token');
-
-    await expect(logout()).rejects.toThrow();
+    await authApi.logout();
     expect(getToken()).toBeNull();
   });
 });

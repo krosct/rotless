@@ -19,12 +19,15 @@ it('lets an owner invite a user by email', function () {
         ['email' => 'guest@example.com']
     );
 
-    $response->assertCreated()->assertJsonStructure(['data' => ['id', 'email', 'token', 'expires_at']]);
+    $response->assertCreated()->assertJsonStructure([
+        'message',
+        'invitation' => ['token', 'email', 'household_name', 'invite_url', 'expires_at'],
+    ]);
 
     expect(HouseholdInvitation::where('email', 'guest@example.com')->exists())->toBeTrue();
 });
 
-it('forbids non-owners from inviting', function () {
+it('forbids members and outsiders from inviting', function () {
     $member = User::factory()->create();
     $outsider = User::factory()->create();
     $household = Household::create(['name' => 'Home']);
@@ -41,6 +44,19 @@ it('forbids non-owners from inviting', function () {
     )->assertForbidden();
 });
 
+it('lets a manager invite a user by email', function () {
+    $manager = User::factory()->create();
+    $household = Household::create(['name' => 'Home']);
+    $household->users()->attach($manager->id, ['role' => HouseholdRole::Manager->value]);
+
+    $this->actingAs($manager, 'sanctum')->postJson(
+        "/api/v1/households/{$household->id}/invitations",
+        ['email' => 'guest@example.com']
+    )->assertCreated();
+
+    expect(HouseholdInvitation::where('email', 'guest@example.com')->exists())->toBeTrue();
+});
+
 it('rejects inviting someone who is already a member', function () {
     $owner = User::factory()->create();
     $household = Household::create(['name' => 'Home']);
@@ -50,6 +66,45 @@ it('rejects inviting someone who is already a member', function () {
         "/api/v1/households/{$household->id}/invitations",
         ['email' => $owner->email]
     )->assertStatus(422);
+});
+
+it('reports the invitation state for the current user', function () {
+    $owner = User::factory()->create();
+    $guest = User::factory()->create(['email' => 'guest@example.com']);
+    $outsider = User::factory()->create(['email' => 'outsider@example.com']);
+    $household = Household::create(['name' => 'Home']);
+    $household->users()->attach($owner->id, ['role' => HouseholdRole::Owner->value]);
+
+    $invitation = HouseholdInvitation::create([
+        'household_id' => $household->id,
+        'email' => 'guest@example.com',
+        'token' => str_repeat('d', 64),
+        'status' => InvitationStatus::Pending,
+        'expires_at' => now()->addDays(7),
+    ]);
+
+    // Anonymous visitor is not the invitee.
+    $this->getJson("/api/v1/invitations/info/{$invitation->token}")
+        ->assertOk()
+        ->assertJsonPath('state', 'not_invited');
+
+    // The invited user is recognized.
+    $this->actingAs($guest, 'sanctum')
+        ->getJson("/api/v1/invitations/info/{$invitation->token}")
+        ->assertOk()
+        ->assertJsonPath('state', 'invited');
+
+    // The owner already belongs to the household.
+    $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/invitations/info/{$invitation->token}")
+        ->assertOk()
+        ->assertJsonPath('state', 'already_member');
+
+    // A different user is neither invited nor a member.
+    $this->actingAs($outsider, 'sanctum')
+        ->getJson("/api/v1/invitations/info/{$invitation->token}")
+        ->assertOk()
+        ->assertJsonPath('state', 'not_invited');
 });
 
 it('lets the invited user accept and join as member', function () {
@@ -70,7 +125,7 @@ it('lets the invited user accept and join as member', function () {
         'token' => $invitation->token,
     ]);
 
-    $response->assertOk()->assertJsonPath('data.household_id', $household->id);
+    $response->assertOk()->assertJsonPath('household.id', $household->id);
 
     expect($guest->households()->whereKey($household->id)->exists())->toBeTrue();
     expect($guest->households()->find($household->id)->pivot->role)->toBe('member');
