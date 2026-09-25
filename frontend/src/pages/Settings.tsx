@@ -1,48 +1,202 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { updateProfile } from '@/api/auth';
-import { getApiBaseUrl, setCustomApiUrl } from '@/api/client';
+import { updateProfile, createTelegramLink, unlinkTelegram, changePassword } from '@/api/auth';
 import {
   User,
   Send,
-  HelpCircle,
+  Link2,
+  Unlink,
+  Copy,
+  Check,
+  KeyRound,
   CheckCircle2,
-  Server,
-  ExternalLink,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+const LINK_TTL_SECONDS = 60;
+const COPY_FEEDBACK_MS = 3000;
+const LINK_POLL_MS = 3000;
+
+const TELEGRAM_LINK_STORAGE_KEY = 'rotless_telegram_link';
+
+interface StoredTelegramLink {
+  botUsername: string;
+  startCommand: string;
+  expiresAt: number;
+}
+
+function readStoredTelegramLink(): StoredTelegramLink | null {
+  try {
+    const raw = sessionStorage.getItem(TELEGRAM_LINK_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as StoredTelegramLink;
+    if (parsed.expiresAt <= Date.now()) {
+      sessionStorage.removeItem(TELEGRAM_LINK_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function LinkTimer({ secondsLeft, total }: { secondsLeft: number; total: number }) {
+  const radius = 12;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.max(0, Math.min(1, secondsLeft / total));
+  const isUrgent = secondsLeft <= 10;
+  const color = isUrgent ? '#e11d48' : '#2d6a4f';
+
+  return (
+    <div className="relative w-8 h-8 shrink-0" aria-label={`Expira em ${secondsLeft} segundos`}>
+      <svg className="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r={radius} fill="none" strokeWidth="3" className="stroke-stone-200 dark:stroke-stone-700" />
+        <circle
+          cx="16"
+          cy="16"
+          r={radius}
+          fill="none"
+          strokeWidth="3"
+          stroke={color}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+          style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease' }}
+        />
+      </svg>
+      <span
+        className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums"
+        style={{ color }}
+      >
+        {secondsLeft}
+      </span>
+    </div>
+  );
+}
+
+function CopyIcon({ copied }: { copied: boolean }) {
+  return (
+    <span className="relative inline-flex w-4 h-4 items-center justify-center">
+      <Copy
+        className={`absolute w-4 h-4 transition-all duration-200 ${
+          copied ? 'opacity-0 scale-50' : 'opacity-100 scale-100'
+        }`}
+      />
+      <Check
+        className={`absolute w-4 h-4 text-emerald-600 transition-all duration-200 ${
+          copied ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+        }`}
+      />
+    </span>
+  );
+}
 
 export function Settings() {
   const { user, refreshMe } = useAuth();
 
   // Profile states
   const [name, setName] = useState(user?.name || '');
-  const [telegramChatId, setTelegramChatId] = useState(user?.telegram_chat_id || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+  const isTelegramLinked = Boolean(user?.telegram_chat_id);
 
-  // Backend API URL configuration state
-  const [apiUrl, setApiUrl] = useState(getApiBaseUrl());
+  // Telegram link token states (restored from sessionStorage on mount)
+  const storedLink = readStoredTelegramLink();
+  const [linkCommand, setLinkCommand] = useState<string | null>(storedLink?.startCommand ?? null);
+  const [botUsername, setBotUsername] = useState<string | null>(storedLink?.botUsername ?? null);
+  const [linkExpiresAt, setLinkExpiresAt] = useState<number | null>(storedLink?.expiresAt ?? null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [copiedField, setCopiedField] = useState<'username' | 'command' | null>(null);
+
+  // Tracks the linking flow so the UI can confirm it as soon as the webhook links the account.
+  const awaitingLinkRef = useRef(false);
+  const linkedChatIdAtLinkStartRef = useRef<string | null>(null);
+
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
       setName(user.name);
-      setTelegramChatId(user.telegram_chat_id || '');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (linkExpiresAt === null) {
+      setSecondsLeft(0);
+      return;
+    }
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((linkExpiresAt - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0) {
+        setLinkCommand(null);
+        setBotUsername(null);
+        setLinkExpiresAt(null);
+        try {
+          sessionStorage.removeItem(TELEGRAM_LINK_STORAGE_KEY);
+        } catch {
+          // Ignore storage errors
+        }
+      }
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [linkExpiresAt]);
+
+  // While a link token is pending, poll the profile until the Telegram webhook links the account.
+  useEffect(() => {
+    if (linkExpiresAt === null) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void refreshMe();
+    }, LINK_POLL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [linkExpiresAt, refreshMe]);
+
+  // Confirm the linking as soon as the polled profile reports a new chat id.
+  useEffect(() => {
+    const currentChatId = user?.telegram_chat_id ?? null;
+
+    if (!awaitingLinkRef.current || currentChatId === null || currentChatId === linkedChatIdAtLinkStartRef.current) {
+      return;
+    }
+
+    awaitingLinkRef.current = false;
+    linkedChatIdAtLinkStartRef.current = null;
+    setLinkCommand(null);
+    setBotUsername(null);
+    setLinkExpiresAt(null);
+    try {
+      sessionStorage.removeItem(TELEGRAM_LINK_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+    toast.success('Telegram vinculado com sucesso! Você receberá os alertas de validade aqui.');
+  }, [user?.telegram_chat_id]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingProfile(true);
     try {
-      await updateProfile({
-        name,
-        telegram_chat_id: telegramChatId || null,
-      });
+      await updateProfile({ name });
       await refreshMe();
       toast.success('Perfil e configurações atualizados com sucesso!');
     } catch (err: unknown) {
@@ -53,10 +207,84 @@ export function Settings() {
     }
   };
 
-  const handleSaveApiUrl = (e: React.FormEvent) => {
+  const handleLinkTelegram = async () => {
+    setIsLinking(true);
+    try {
+      const link = await createTelegramLink();
+      const expiresAt = new Date(link.expires_at).getTime();
+      awaitingLinkRef.current = true;
+      linkedChatIdAtLinkStartRef.current = user?.telegram_chat_id ?? null;
+      setLinkCommand(link.start_command);
+      setBotUsername(link.bot_username);
+      setLinkExpiresAt(expiresAt);
+      try {
+        sessionStorage.setItem(
+          TELEGRAM_LINK_STORAGE_KEY,
+          JSON.stringify({
+            botUsername: link.bot_username,
+            startCommand: link.start_command,
+            expiresAt,
+          } satisfies StoredTelegramLink),
+        );
+      } catch {
+        // Ignore storage errors
+      }
+      window.open(link.url, '_blank', 'noopener');
+      toast.info('Abra o Telegram e toque em Start. Confirmaremos a vinculação automaticamente.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao gerar o link de vinculação.';
+      toast.error(msg);
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const handleCopy = async (value: string, label: string, field: 'username' | 'command') => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      window.setTimeout(() => {
+        setCopiedField((current) => (current === field ? null : current));
+      }, COPY_FEEDBACK_MS);
+      toast.success(`${label} copiado.`);
+    } catch {
+      toast.error('Não foi possível copiar.');
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    setIsLinking(true);
+    try {
+      await unlinkTelegram();
+      await refreshMe();
+      toast.success('Telegram desvinculado.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao desvincular o Telegram.';
+      toast.error(msg);
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCustomApiUrl(apiUrl || null);
-    toast.success('URL da API configurada com sucesso!');
+    setIsSavingPassword(true);
+    try {
+      await changePassword({
+        current_password: currentPassword,
+        password: newPassword,
+        password_confirmation: confirmPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Senha alterada com sucesso!');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao alterar a senha.';
+      toast.error(msg);
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   return (
@@ -73,16 +301,16 @@ export function Settings() {
           </p>
         </div>
 
-        {/* User Profile & Telegram Section */}
+        {/* Personal Data Section */}
         <Card>
           <form onSubmit={handleSaveProfile}>
             <CardHeader>
               <div className="flex items-center gap-2.5">
                 <User className="w-5 h-5 text-[#2d6a4f] dark:text-emerald-400" />
-                <CardTitle>Dados Pessoais & Alertas</CardTitle>
+                <CardTitle>Dados Pessoais</CardTitle>
               </div>
               <CardDescription>
-                Atualize seu nome de exibição e vincule seu Telegram para notificações antes do vencimento.
+                Atualize seu nome de exibição e a senha da sua conta.
               </CardDescription>
             </CardHeader>
 
@@ -102,47 +330,9 @@ export function Settings() {
                   helperText="O e-mail cadastrado não pode ser alterado diretamente."
                 />
               </div>
-
-              {/* Telegram Chat ID field */}
-              <div className="flex flex-col gap-2 p-4 bg-stone-50 dark:bg-stone-800/50 rounded-2xl border border-stone-200/80 dark:border-stone-800">
-                <div className="flex items-center gap-2">
-                  <Send className="w-4 h-4 text-sky-500" />
-                  <span className="text-xs font-semibold text-stone-800 dark:text-stone-200">
-                    Notificações via Telegram
-                  </span>
-                </div>
-
-                <Input
-                  label="Telegram Chat ID"
-                  placeholder="Ex: 123456789"
-                  value={telegramChatId}
-                  onChange={(e) => setTelegramChatId(e.target.value)}
-                  helperText="O bot do rotless enviará alertas diários de alimentos que vencem em até 3 dias."
-                />
-
-                <div className="flex items-start gap-2 text-xs text-stone-500 dark:text-stone-400 mt-1">
-                  <HelpCircle className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
-                  <span>
-                    Como obter seu Chat ID: Inicie uma conversa com{' '}
-                    <a
-                      href="https://t.me/userinfobot"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[#2d6a4f] dark:text-emerald-400 font-semibold underline inline-flex items-center gap-0.5"
-                    >
-                      @userinfobot <ExternalLink className="w-3 h-3" />
-                    </a>{' '}
-                    no Telegram e copie o número exibido no campo Id.
-                  </span>
-                </div>
-              </div>
             </CardContent>
 
             <CardFooter>
-              <span className="text-xs text-stone-500 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                Dados protegidos
-              </span>
               <Button type="submit" variant="primary" isLoading={isSavingProfile}>
                 Salvar Alterações
               </Button>
@@ -150,47 +340,140 @@ export function Settings() {
           </form>
         </Card>
 
-        {/* Backend API Connection Card */}
+        {/* Password Section */}
         <Card>
-          <form onSubmit={handleSaveApiUrl}>
+          <form onSubmit={handleChangePassword}>
             <CardHeader>
               <div className="flex items-center gap-2.5">
-                <Server className="w-5 h-5 text-stone-600 dark:text-stone-400" />
-                <CardTitle>Conexão Backend (Laravel REST API)</CardTitle>
+                <KeyRound className="w-5 h-5 text-[#2d6a4f] dark:text-emerald-400" />
+                <CardTitle>Alterar Senha</CardTitle>
               </div>
               <CardDescription>
-                Por padrão, o rotless usa a API v1 integrada no servidor. Se você tiver sua própria instância do Laravel 12 rodando, configure a URL base aqui.
+                Informe a senha atual e escolha uma nova senha com pelo menos 8 caracteres.
               </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex flex-col gap-3">
+            <CardContent className="flex flex-col gap-4">
               <Input
-                label="URL Base da API (opcional)"
-                placeholder="Ex: http://localhost:8000 ou https://api.seudominio.com"
-                value={apiUrl}
-                onChange={(e) => setApiUrl(e.target.value)}
-                helperText="Deixe em branco para usar o backend integrado (Sanctum / REST v1)."
+                label="Senha atual"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
               />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Nova senha"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Confirmar nova senha"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="text-xs text-stone-500 dark:text-stone-400">
+                <p className="font-semibold text-stone-600 dark:text-stone-300">Dica:</p>
+                <ul className="list-disc list-inside mt-1 flex flex-col gap-0.5">
+                  <li>Ter no mínimo 8 caracteres.</li>
+                </ul>
+              </div>
             </CardContent>
 
             <CardFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setApiUrl('');
-                  setCustomApiUrl(null);
-                  toast.info('Restaurado para o backend integrado.');
-                }}
-              >
-                Restaurar Padrão
-              </Button>
-              <Button type="submit" variant="secondary" size="sm">
-                Salvar URL da API
+              <Button type="submit" variant="primary" isLoading={isSavingPassword}>
+                Alterar Senha
               </Button>
             </CardFooter>
           </form>
+        </Card>
+
+        {/* Alerts Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2.5">
+              <Send className="w-5 h-5 text-sky-500" />
+              <CardTitle>Alertas</CardTitle>
+              {isTelegramLinked ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" aria-label="Vinculado" />
+              ) : (
+                <XCircle className="w-4 h-4 text-rose-500" aria-label="Não vinculado" />
+              )}
+            </div>
+            <CardDescription>
+              {isTelegramLinked && user?.telegram_chat_name
+                ? `Vinculado à conta ${user.telegram_chat_name}.`
+                : 'Vincule seu Telegram para receber notificações antes do vencimento.'}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
+              {isTelegramLinked
+                ? 'Sua conta está vinculada. Os alertas de validade chegam neste Telegram.'
+                : 'Vincule seu Telegram para receber os alertas de validade. Você será levado ao bot para confirmar a vinculação.'}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                isLoading={isLinking}
+                onClick={handleLinkTelegram}
+              >
+                <Link2 className="w-4 h-4" />
+                {isTelegramLinked ? 'Vincular outro Telegram' : 'Vincular Telegram'}
+              </Button>
+
+              {linkCommand && (
+                <div className="flex items-center gap-2 rounded-xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900 px-2 py-1.5">
+                  <LinkTimer secondsLeft={secondsLeft} total={LINK_TTL_SECONDS} />
+
+                  {botUsername && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(`@${botUsername}`, 'Username', 'username')}
+                    >
+                      <CopyIcon copied={copiedField === 'username'} />
+                      Username
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCopy(linkCommand, 'Comando', 'command')}
+                  >
+                    <CopyIcon copied={copiedField === 'command'} />
+                    Token
+                  </Button>
+                </div>
+              )}
+
+              {isTelegramLinked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isLinking}
+                  onClick={handleUnlinkTelegram}
+                >
+                  <Unlink className="w-4 h-4" />
+                  Desvincular
+                </Button>
+              )}
+            </div>
+          </CardContent>
         </Card>
       </main>
 

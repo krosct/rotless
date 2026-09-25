@@ -53,9 +53,42 @@ export async function getMe(): Promise<{ user: User }> {
   });
 }
 
-export async function updateProfile(data: { name?: string; telegram_chat_id?: string | null }): Promise<{ user: User; message: string }> {
+export async function updateProfile(data: { name?: string }): Promise<{ user: User; message: string }> {
   return apiClient<{ user: User; message: string }>('/api/v1/user/profile', {
     method: 'PATCH',
     body: data,
+  });
+}
+
+export interface ChangePasswordInput {
+  current_password: string;
+  password: string;
+  password_confirmation: string;
+}
+
+export async function changePassword(data: ChangePasswordInput): Promise<{ message: string }> {
+  return apiClient<{ message: string }>('/api/v1/user/password', {
+    method: 'PATCH',
+    body: data,
+  });
+}
+
+export interface TelegramLink {
+  url: string;
+  bot_username: string;
+  start_command: string;
+  expires_at: string;
+}
+
+export async function createTelegramLink(): Promise<TelegramLink> {
+  const res = await apiClient<{ data: TelegramLink }>('/api/v1/telegram/link', {
+    method: 'POST',
+  });
+  return res.data;
+}
+
+export async function unlinkTelegram(): Promise<{ message: string }> {
+  return apiClient<{ message: string }>('/api/v1/telegram/link', {
+    method: 'DELETE',
   });
 }
