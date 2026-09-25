@@ -1,7 +1,26 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Household } from '@/types';
-import { getToken, removeToken } from '@/api/client';
+import { ApiError, getToken, removeToken } from '@/api/client';
 import * as authApi from '@/api/auth';
+
+// A transient /me failure (aborted request, network hiccup, 5xx) must not sign
+// the user out. Retry a couple of times before giving up; only a 401 means the
+// stored token is actually invalid.
+const ME_RETRY_DELAYS_MS = [300, 900];
+
+async function fetchMeWithRetry(): Promise<{ user: User }> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await authApi.getMe();
+    } catch (err) {
+      const isUnauthorized = err instanceof ApiError && err.status === 401;
+      if (isUnauthorized || attempt >= ME_RETRY_DELAYS_MS.length) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, ME_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -68,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const res = await authApi.getMe();
+      const res = await fetchMeWithRetry();
       setUser(res.user);
       if (res.user.households && res.user.households.length > 0) {
         setCurrentHousehold((prev) => {
@@ -79,11 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch (err) {
-      // If unauthorized, clear token
-      removeToken();
-      setTokenState(null);
-      setUser(null);
-      setCurrentHousehold(null);
+      // Only an explicit 401 invalidates the session. A transient failure must
+      // keep the stored token so a quick page reload does not sign the user out.
+      if (err instanceof ApiError && err.status === 401) {
+        removeToken();
+        setTokenState(null);
+        setUser(null);
+        setCurrentHousehold(null);
+      }
     } finally {
       setIsLoading(false);
     }
