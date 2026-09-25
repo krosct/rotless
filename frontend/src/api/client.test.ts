@@ -66,6 +66,20 @@ describe('client utility and token storage', () => {
     }
   });
 
+  it('faz requisições relativas à mesma origem (/api)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ user: { id: 1 } }),
+    });
+    global.fetch = fetchMock;
+
+    await apiClient('/api/v1/me');
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/me');
+  });
+
   it('lança ApiError quando endpoint retorna 500', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

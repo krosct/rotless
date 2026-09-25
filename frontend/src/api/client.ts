@@ -1,7 +1,6 @@
 import { ApiValidationError } from '@/types';
 
 export const TOKEN_STORAGE_KEY = 'rotless_token';
-export const API_URL_STORAGE_KEY = 'rotless_api_url';
 
 export class ApiError extends Error {
   status: number;
@@ -41,43 +40,15 @@ export function removeToken(): void {
   }
 }
 
-export function getApiBaseUrl(): string {
-  try {
-    const custom = localStorage.getItem(API_URL_STORAGE_KEY);
-    if (custom && custom.trim().length > 0) {
-      return custom.trim().replace(/\/$/, '');
-    }
-  } catch {
-    // Ignore
-  }
-  // Check VITE_API_URL if configured
-  const envUrl = (import.meta as unknown as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
-  if (envUrl) {
-    return envUrl.replace(/\/$/, '');
-  }
-  return '';
-}
-
-export function setCustomApiUrl(url: string | null): void {
-  try {
-    if (!url) {
-      localStorage.removeItem(API_URL_STORAGE_KEY);
-    } else {
-      localStorage.setItem(API_URL_STORAGE_KEY, url.trim().replace(/\/$/, ''));
-    }
-  } catch {
-    // Ignore
-  }
-}
-
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const baseUrl = getApiBaseUrl();
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${baseUrl}${cleanEndpoint}`;
+  // The API always lives on the same origin as the app, under /api/*. In
+  // development Vite proxies that prefix to Laravel; in production Caddy routes
+  // it. Keeping every request relative guarantees dev and prod behave the same.
+  const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
   const headers = new Headers(options.headers || {});
 
