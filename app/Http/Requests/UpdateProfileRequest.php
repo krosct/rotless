@@ -18,7 +18,6 @@ final class UpdateProfileRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'string', 'max:255'],
-            'telegram_chat_id' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 }

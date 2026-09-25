@@ -12,7 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'telegram_chat_id'])]
+#[Fillable(['name', 'email', 'password', 'telegram_chat_id', 'telegram_chat_name'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
