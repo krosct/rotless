@@ -3,8 +3,9 @@ services:
     build:
       context: .
       network: host
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       DB_CONNECTION: pgsql
       DB_HOST: db
@@ -21,6 +22,7 @@ services:
 
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: rotless
       POSTGRES_USER: rotless
@@ -39,6 +41,7 @@ services:
     build:
       context: .
       network: host
+    restart: unless-stopped
     command: ["php", "artisan", "queue:work"]
     environment:
       DB_CONNECTION: pgsql
@@ -58,6 +61,7 @@ services:
     build:
       context: .
       network: host
+    restart: unless-stopped
     command: ["php", "artisan", "schedule:work"]
     environment:
       DB_CONNECTION: pgsql
@@ -73,5 +77,27 @@ services:
       db:
         condition: service_healthy
 
+  # HTTPS reverse proxy: serves the SPA and forwards /api/* to Laravel.
+  # Only runs when the "caddy" profile is enabled (production):
+  #   docker compose --profile caddy up -d
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      APP_URL: ${APP_URL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   db-data:
+  caddy-data:
+  caddy-config:

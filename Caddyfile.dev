@@ -1,0 +1,29 @@
+# Local development reverse proxy.
+#
+# Mirrors production routing (single origin, HTTPS, /api prefix) but forwards the
+# SPA to the Vite dev server so HMR keeps working. The API, database, queue and
+# scheduler are the exact same containers used in production.
+#
+# Started with:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile local up -d
+
+https://localhost {
+	tls internal
+
+	encode zstd gzip
+
+	# API (including /api/v1/telegram/webhook) -> Laravel
+	handle /api/* {
+		reverse_proxy app:8000
+	}
+
+	# SPA -> Vite dev server (HMR websocket is proxied too)
+	handle {
+		reverse_proxy frontend:5173
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
