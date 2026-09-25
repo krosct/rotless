@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/Button';
 import { Users, Leaf, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { rememberInviteReturnTo } from '@/utils/inviteReturnTo';
 
 export function AcceptInvite() {
   const { token } = useParams<{ token: string }>();
@@ -17,6 +18,13 @@ export function AcceptInvite() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Remember the invite so login/register can return here even if the user
+  // navigates to the auth pages on their own.
+  useEffect(() => {
+    if (!token) return;
+    rememberInviteReturnTo(`/invite/${token}`);
+  }, [token]);
 
   useEffect(() => {
     async function loadInvite() {
@@ -35,12 +43,13 @@ export function AcceptInvite() {
     loadInvite();
   }, [token, isAuthLoading]);
 
-  // Users who are neither the invitee nor a member go straight to their own pantry.
+  // Only a signed-in user can be "not invited" (their email is not the invitee).
+  // Anonymous visitors must stay on this page so they can log in or register.
   useEffect(() => {
-    if (invite?.state === 'not_invited') {
+    if (isAuthenticated && invite?.state === 'not_invited') {
       navigate('/dashboard', { replace: true });
     }
-  }, [invite, navigate]);
+  }, [isAuthenticated, invite, navigate]);
 
   const handleAccept = async () => {
     if (!token) return;
@@ -88,10 +97,26 @@ export function AcceptInvite() {
         </div>
 
         <Card>
-          {isLoading || invite?.state === 'not_invited' ? (
+          {isLoading ? (
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-[#2d6a4f]" />
               <p className="text-xs text-stone-500 mt-3">Verificando convite...</p>
+            </CardContent>
+          ) : error ? (
+            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center text-rose-500 mb-3">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100 mb-1">
+                Convite Inválido
+              </h2>
+              <p className="text-xs text-stone-500 max-w-xs mb-6">{error}</p>
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/login', { state: { returnTo: `/invite/${token}` } })}
+              >
+                Ir para Login
+              </Button>
             </CardContent>
           ) : invite?.state === 'already_member' ? (
             <CardContent className="flex flex-col items-center justify-center py-8 text-center">
@@ -109,18 +134,10 @@ export function AcceptInvite() {
                 Voltar para a tela inicial
               </Button>
             </CardContent>
-          ) : error ? (
-            <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center text-rose-500 mb-3">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100 mb-1">
-                Convite Inválido
-              </h2>
-              <p className="text-xs text-stone-500 max-w-xs mb-6">{error}</p>
-              <Button variant="secondary" onClick={() => navigate('/login')}>
-                Ir para Login
-              </Button>
+          ) : isAuthenticated && invite?.state === 'not_invited' ? (
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-[#2d6a4f]" />
+              <p className="text-xs text-stone-500 mt-3">Verificando convite...</p>
             </CardContent>
           ) : (
             <>
@@ -168,7 +185,7 @@ export function AcceptInvite() {
                     variant="ghost"
                     size="sm"
                     className="w-full text-xs text-stone-500"
-                    onClick={() => navigate('/login')}
+                    onClick={() => navigate('/login', { state: { returnTo: `/invite/${token}` } })}
                   >
                     Já tenho uma conta
                   </Button>

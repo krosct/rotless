@@ -1,4 +1,4 @@
-import { Navigate, createBrowserRouter } from 'react-router-dom';
+import { Navigate, createBrowserRouter, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Login } from '@/pages/Login';
 import { Register } from '@/pages/Register';
@@ -9,6 +9,7 @@ import { Settings } from '@/pages/Settings';
 import { HouseholdSettings } from '@/pages/HouseholdSettings';
 import { HouseholdActivities } from '@/pages/HouseholdActivities';
 import { AcceptInvite } from '@/pages/AcceptInvite';
+import { resolveReturnTo, clearInviteReturnTo } from '@/utils/inviteReturnTo';
 import { Loader2 } from 'lucide-react';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -34,13 +35,17 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return null;
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    const stateReturnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+    const returnTo = resolveReturnTo(stateReturnTo);
+    clearInviteReturnTo();
+    return <Navigate to={returnTo || '/dashboard'} replace />;
   }
 
   return <>{children}</>;
