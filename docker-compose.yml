@@ -23,12 +23,23 @@ services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    # Lean settings so Postgres fits on a small VPS without starving the app.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
     environment:
       POSTGRES_DB: rotless
       POSTGRES_USER: rotless
       POSTGRES_PASSWORD: rotless
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
