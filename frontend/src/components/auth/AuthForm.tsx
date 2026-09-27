@@ -10,6 +10,9 @@ import { ApiError } from '@/api/client';
 import { Mail, Lock, User, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Shown when the API rate limit answers 429 (see throttle:login / throttle:register).
+const TOO_MANY_ATTEMPTS = 'Muitas tentativas seguidas. Aguarde alguns minutos e tente novamente.';
+
 const loginSchema = z.object({
   email: z.string().min(1, 'O e-mail é obrigatório').email('E-mail em formato inválido'),
   password: z.string().min(1, 'A senha é obrigatória'),
@@ -73,7 +76,9 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
             });
           });
         }
-        setGlobalError(err.message || 'Credenciais inválidas.');
+        setGlobalError(
+          err.status === 429 ? TOO_MANY_ATTEMPTS : err.message || 'Credenciais inválidas.',
+        );
       } else {
         setGlobalError('Não foi possível conectar ao servidor.');
       }
@@ -100,7 +105,9 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
             });
           });
         }
-        setGlobalError(err.message || 'Erro ao realizar cadastro.');
+        setGlobalError(
+          err.status === 429 ? TOO_MANY_ATTEMPTS : err.message || 'Erro ao realizar cadastro.',
+        );
       } else {
         setGlobalError('Não foi possível conectar ao servidor.');
       }

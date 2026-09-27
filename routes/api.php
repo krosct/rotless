@@ -9,18 +9,20 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\TelegramController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/v1/health', HealthController::class);
+// Rate limiters (throttle:<name>) are defined in AppServiceProvider.
 
-Route::post('/v1/register', [AuthController::class, 'register']);
-Route::post('/v1/login', [AuthController::class, 'login']);
-Route::get('/v1/invitations/info/{token}', [InvitationController::class, 'info']);
-Route::post('/v1/telegram/webhook', [TelegramController::class, 'webhook']);
+Route::get('/v1/health', HealthController::class)->middleware('throttle:public');
 
-Route::middleware('auth:sanctum')->group(function (): void {
+Route::post('/v1/register', [AuthController::class, 'register'])->middleware('throttle:register');
+Route::post('/v1/login', [AuthController::class, 'login'])->middleware('throttle:login');
+Route::get('/v1/invitations/info/{token}', [InvitationController::class, 'info'])->middleware('throttle:public');
+Route::post('/v1/telegram/webhook', [TelegramController::class, 'webhook'])->middleware('throttle:webhook');
+
+Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::post('/v1/logout', [AuthController::class, 'logout']);
     Route::get('/v1/me', [AuthController::class, 'me']);
     Route::patch('/v1/user/profile', [AuthController::class, 'updateProfile']);
-    Route::patch('/v1/user/password', [AuthController::class, 'updatePassword']);
+    Route::patch('/v1/user/password', [AuthController::class, 'updatePassword'])->middleware('throttle:password');
     Route::get('/v1/batches', [BatchController::class, 'index']);
     Route::post('/v1/batches', [BatchController::class, 'store']);
     Route::get('/v1/batches/{batch}', [BatchController::class, 'show']);

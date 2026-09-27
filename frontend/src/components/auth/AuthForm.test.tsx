@@ -74,6 +74,24 @@ describe('AuthForm component', () => {
     });
   });
 
+  it('exibe aviso de muitas tentativas quando a API responde 429', async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(authApi, 'login').mockRejectedValueOnce(
+      new ApiError(429, 'Too many attempts. Try again in 60 seconds.'),
+    );
+
+    renderWithProviders(<AuthForm defaultMode="login" />);
+
+    await user.type(screen.getByLabelText(/E-mail/i), 'user@rotless.dev');
+    await user.type(screen.getByLabelText(/Senha/i), 'wrongpass');
+    await user.click(screen.getByRole('button', { name: /Entrar na Despensa/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Muitas tentativas seguidas/i)).toBeDefined();
+    });
+  });
+
   it('mantém o formulário montado e exibe o erro quando o login falha', async () => {
     const user = userEvent.setup();
 
