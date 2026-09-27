@@ -1,0 +1,24 @@
+# FrankenPHP inside the app container (classic mode: one PHP request per thread,
+# no long-lived workers, same semantics as PHP-FPM).
+#
+# It only listens on plain HTTP :8000. The edge Caddy (Caddyfile) terminates
+# HTTPS, compresses responses and forwards /api/* here with X-Forwarded-For.
+
+{
+	admin off
+	auto_https off
+
+	frankenphp {
+		# Concurrent PHP requests. Each thread can use up to memory_limit, so
+		# keep this small on a 1 GB VPS; raise it with FRANKENPHP_THREADS.
+		num_threads {$FRANKENPHP_THREADS:4}
+	}
+}
+
+:8000 {
+	root * /var/www/html/public
+	php_server
+
+	# Do not advertise the server stack.
+	header -Server
+}
