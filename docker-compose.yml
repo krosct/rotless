@@ -102,6 +102,8 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend/dist:/srv:ro
+      # Cloudflare Origin Certificate (origin.pem + origin.key), only on the server.
+      - ./certs:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config
 

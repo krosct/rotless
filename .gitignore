@@ -24,6 +24,7 @@ ssh-key-*
 /storage/*.key
 /storage/pail
 /caddy-root.crt
+/certs/
 /vendor
 _ide_helper.php
 Homestead.json
