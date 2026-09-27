@@ -6,6 +6,14 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
+    # The FrankenPHP image checks its admin API, which docker/frankenphp/Caddyfile
+    # turns off; probe Laravel's /up route instead (no DB, not exposed by Caddy).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8000/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -51,6 +59,9 @@ services:
       network: host
     restart: unless-stopped
     command: ["php", "artisan", "queue:work"]
+    # Runs an artisan command, not the web server: no HTTP health check.
+    healthcheck:
+      disable: true
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -64,6 +75,9 @@ services:
       network: host
     restart: unless-stopped
     command: ["php", "artisan", "schedule:work"]
+    # Runs an artisan command, not the web server: no HTTP health check.
+    healthcheck:
+      disable: true
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
