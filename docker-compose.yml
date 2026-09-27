@@ -28,12 +28,13 @@ services:
       - -c
       - maintenance_work_mem=32MB
     # Same credentials the app reads from .env (DB_*). They only apply when the
-    # db-data volume is first created; changing them later does not alter an
-    # existing database.
+    # db-data volume is first created; to rotate the password of an existing
+    # database run ALTER USER, then update DB_PASSWORD in .env.
+    # There is no default password: compose refuses to start without one.
     environment:
       POSTGRES_DB: ${DB_DATABASE:-rotless}
       POSTGRES_USER: ${DB_USERNAME:-rotless}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-rotless}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (e.g. openssl rand -hex 32)}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
