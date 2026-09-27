@@ -13,8 +13,11 @@
 #
 # Started only with the "caddy" profile:
 #   docker compose --profile caddy up -d
-
 {
+	# Cloudflare redirects HTTP to HTTPS at its edge and reaches this origin on
+	# 443 only, so there is no port 80 listener or redirect here.
+	auto_https disable_redirects
+
 	servers {
 		# Resolve the visitor's IP from CF-Connecting-IP, but only when the
 		# connection really comes from Cloudflare.
