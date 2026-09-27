@@ -3,6 +3,10 @@
 .env
 .env.backup
 .env.production
+# Never commit keys or certificates.
+*.key
+*.pem
+ssh-key-*
 .phpactor.json
 .phpunit.result.cache
 /.cursor/
@@ -19,6 +23,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/caddy-root.crt
 /vendor
 _ide_helper.php
 Homestead.json

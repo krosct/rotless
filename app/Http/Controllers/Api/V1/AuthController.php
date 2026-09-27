@@ -8,6 +8,7 @@ use App\Enums\HouseholdRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\UpdatePasswordRequest;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Models\Batch;
 use App\Models\Household;
@@ -75,15 +76,23 @@ final class AuthController extends Controller
         ]);
     }
 
-    public function updateProfile(UpdateProfileRequest $request, Request $httpRequest): JsonResponse
+    public function updateProfile(UpdateProfileRequest $request): JsonResponse
     {
-        $user = $httpRequest->user();
-        $user->update($request->only(['name', 'telegram_chat_id']));
+        $user = $request->user();
+        $user->update($request->only(['name']));
 
         return response()->json([
             'user' => $this->serializeUser($user->fresh()->load('households')),
             'message' => 'Profile updated successfully.',
         ]);
+    }
+
+    public function updatePassword(UpdatePasswordRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $user->update(['password' => $request->string('password')]);
+
+        return response()->json(['message' => 'Password updated successfully.']);
     }
 
     public function logout(Request $request): JsonResponse
@@ -140,6 +149,7 @@ final class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'telegram_chat_id' => $user->telegram_chat_id,
+            'telegram_chat_name' => $user->telegram_chat_name,
             'households' => $households,
         ];
     }

@@ -35,6 +35,9 @@ return [
 
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'bot_username' => env('TELEGRAM_BOT_USERNAME'),
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+        'test_chat_id' => env('TELEGRAM_CHAT_ID'),
         'expiry_warning_days' => (int) env('EXPIRY_WARNING_DAYS', 3),
         'timeout' => (int) env('TELEGRAM_TIMEOUT', 10),
     ],

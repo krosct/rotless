@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HouseholdMember, HouseholdRole } from '@/types';
 import { Badge } from '@/components/ui/Badge';
@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { InviteModal } from './InviteModal';
 import { removeMember, updateMemberRole } from '@/api/households';
 import { formatDate } from '@/utils/format';
-import { UserPlus, Users, Crown, Shield, Activity, Trash2, UserCog, ChevronDown } from 'lucide-react';
+import { UserPlus, Users, Crown, Shield, Activity, Trash2, UserCog, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface MemberListProps {
@@ -24,6 +24,28 @@ const roleLabels: Record<HouseholdRole, string> = {
   manager: 'Gerente',
   member: 'Membro',
 };
+
+type SortKey = 'joined_at' | 'name';
+
+const sortLabels: Record<SortKey, string> = {
+  joined_at: 'Data de entrada',
+  name: 'Nome',
+};
+
+function sortMembers(members: HouseholdMember[], sortKey: SortKey): HouseholdMember[] {
+  return [...members].sort((a, b) => {
+    if (a.role === 'owner' && b.role !== 'owner') return -1;
+    if (b.role === 'owner' && a.role !== 'owner') return 1;
+
+    if (sortKey === 'name') {
+      return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+    }
+
+    const aTime = a.joined_at ? new Date(a.joined_at).getTime() : 0;
+    const bTime = b.joined_at ? new Date(b.joined_at).getTime() : 0;
+    return aTime - bTime;
+  });
+}
 
 export function MemberList({
   householdId,
@@ -43,12 +65,20 @@ export function MemberList({
     role: 'manager' | 'member';
   } | null>(null);
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('joined_at');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  const sortedMembers = useMemo(() => sortMembers(members, sortKey), [members, sortKey]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
         setRoleMenuMemberId(null);
+      }
+      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
+        setIsSortMenuOpen(false);
       }
     };
 
@@ -103,21 +133,60 @@ export function MemberList({
           <span className="text-xs text-stone-500">({members.length})</span>
         </div>
 
-        {canManageMembers && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setIsInviteOpen(true)}
-            className="border-[#2d6a4f]/40 text-[#2d6a4f] dark:text-emerald-400 hover:bg-[#2d6a4f]/10"
-          >
-            <UserPlus className="w-3.5 h-3.5 mr-1" />
-            Convidar
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div ref={sortMenuRef} className="relative">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsSortMenuOpen((prev) => !prev)}
+              aria-haspopup="listbox"
+              aria-expanded={isSortMenuOpen}
+              title="Ordenar membros"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
+              {sortLabels[sortKey]}
+            </Button>
+
+            {isSortMenuOpen && (
+              <div
+                role="listbox"
+                className="absolute right-0 top-full mt-1.5 w-40 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl shadow-xl overflow-hidden z-40"
+              >
+                {(['joined_at', 'name'] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="option"
+                    aria-selected={sortKey === key}
+                    onClick={() => {
+                      setSortKey(key);
+                      setIsSortMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
+                  >
+                    {sortLabels[key]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {canManageMembers && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsInviteOpen(true)}
+              className="border-[#2d6a4f]/40 text-[#2d6a4f] dark:text-emerald-400 hover:bg-[#2d6a4f]/10"
+            >
+              <UserPlus className="w-3.5 h-3.5 mr-1" />
+              Convidar
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="divide-y divide-stone-100 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-2xl bg-white dark:bg-stone-900">
-        {members.map((member) => {
+        {sortedMembers.map((member) => {
           const isMemberOwner = member.role === 'owner';
 
           return (

@@ -67,6 +67,7 @@ export interface User {
   name: string;
   email: string;
   telegram_chat_id?: string | null;
+  telegram_chat_name?: string | null;
   households?: Household[];
 }
 

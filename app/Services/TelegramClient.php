@@ -31,6 +31,28 @@ final class TelegramClient
         }
     }
 
+    public function botUsername(): string
+    {
+        if ($this->botToken === '') {
+            throw new RuntimeException('Telegram bot token is not configured.');
+        }
+
+        $response = Http::timeout($this->timeoutSeconds)
+            ->get("https://api.telegram.org/bot{$this->botToken}/getMe");
+
+        if (! $response->successful()) {
+            throw new RuntimeException("Telegram API error: {$response->status()}");
+        }
+
+        $username = $response->json('result.username');
+
+        if (! is_string($username) || $username === '') {
+            throw new RuntimeException('Telegram bot username is missing from the getMe response.');
+        }
+
+        return $username;
+    }
+
     public static function fromConfig(): self
     {
         return new self(

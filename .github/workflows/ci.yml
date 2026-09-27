@@ -1,0 +1,130 @@
+name: CI
+
+on:
+    push:
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    backend:
+        name: Backend (pint, phpstan, pest)
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+              with:
+                  php-version: '8.3'
+                  extensions: mbstring, intl, bcmath, gd, zip, pdo_sqlite, sqlite3, curl, xml, fileinfo
+                  coverage: none
+
+            - name: Install Composer dependencies
+              run: composer install --no-interaction --prefer-dist --no-progress
+
+            - name: Prepare environment
+              run: |
+                  cp .env.example .env
+                  php artisan key:generate
+
+            - name: Check code style (Pint)
+              run: vendor/bin/pint --test
+
+            - name: Static analysis (PHPStan)
+              run: vendor/bin/phpstan analyse --no-progress
+
+            - name: Run tests (Pest)
+              run: vendor/bin/pest
+
+    # The Pest suite intentionally runs on in-memory SQLite (see tests/TestCase.php).
+    # This job validates migrations and a real database query against Postgres.
+    postgres:
+        name: Backend (Postgres migrate + health)
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: postgres:17-alpine
+                env:
+                    POSTGRES_DB: rotless
+                    POSTGRES_USER: rotless
+                    POSTGRES_PASSWORD: rotless
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U rotless -d rotless"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+              with:
+                  php-version: '8.3'
+                  extensions: mbstring, intl, bcmath, gd, zip, pdo_pgsql, pgsql, curl, xml, fileinfo
+                  coverage: none
+
+            - name: Install Composer dependencies
+              run: composer install --no-interaction --prefer-dist --no-progress
+
+            - name: Prepare environment
+              run: |
+                  cp .env.example .env
+                  php artisan key:generate
+                  sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
+                  {
+                    echo 'DB_HOST=127.0.0.1'
+                    echo 'DB_PORT=5432'
+                    echo 'DB_DATABASE=rotless'
+                    echo 'DB_USERNAME=rotless'
+                    echo 'DB_PASSWORD=rotless'
+                  } >> .env
+
+            - name: Run migrations against Postgres
+              run: php artisan migrate --force
+
+            - name: Health smoke test against Postgres
+              run: |
+                  php artisan serve --host=127.0.0.1 --port=8000 > /tmp/serve.log 2>&1 &
+                  for _ in $(seq 1 15); do
+                    if curl -fsS http://127.0.0.1:8000/api/v1/health -o /tmp/health.json; then
+                      break
+                    fi
+                    sleep 1
+                  done
+                  cat /tmp/health.json
+                  grep -q '"database":"connected"' /tmp/health.json
+
+    frontend:
+        name: Frontend (lint, test, build)
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: frontend
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup Node
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+              with:
+                  node-version: '22'
+                  cache: npm
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint
+              run: npm run lint
+
+            - name: Test
+              run: npm run test
+
+            - name: Build
+              run: npm run build

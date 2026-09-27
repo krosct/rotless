@@ -1,0 +1,34 @@
+# rotless reverse proxy.
+#
+# Serves the React SPA from /srv (frontend/dist) and proxies /api/* to the
+# Laravel container. The site address is taken from APP_URL, so HTTPS is
+# obtained/renewed automatically and stays in sync with the Telegram webhook URL.
+#
+# Started only with the "caddy" profile:
+#   docker compose --profile caddy up -d
+
+{$APP_URL} {
+	encode zstd gzip
+
+	# API (including /api/v1/telegram/webhook) -> Laravel
+	handle /api/* {
+		reverse_proxy app:8000
+	}
+
+	# SPA -> static files with client-side routing fallback
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Long-lived cache for hashed build assets
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

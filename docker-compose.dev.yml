@@ -1,0 +1,46 @@
+# Local-development override.
+#
+# Runs the frontend through Caddy so the browser talks to a single HTTPS origin
+# (https://localhost) with /api proxied to Laravel - the same request
+# architecture as production. Only the SPA origin differs: the Vite dev server
+# here, the built static files via the production Caddyfile there. Both use Node
+# 22 and the same source.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile local up -d
+
+services:
+  frontend:
+    image: node:22-alpine
+    profiles: ["local"]
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "test -x node_modules/.bin/vite || npm ci; exec npm run dev -- --host 0.0.0.0"
+    environment:
+      # The browser reaches Vite through Caddy on 443, so HMR must use that port.
+      VITE_HMR_CLIENT_PORT: "443"
+      # Direct Vite access would proxy /api to Laravel; Caddy normally handles it.
+      VITE_API_PROXY_TARGET: "http://app:8000"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      - app
+
+  caddy-dev:
+    image: caddy:2-alpine
+    profiles: ["local"]
+    restart: unless-stopped
+    depends_on:
+      - app
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  frontend-node-modules:
