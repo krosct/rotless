@@ -5,8 +5,8 @@ use Tests\TestCase;
 /*
  * Tests must never touch the development database. RefreshDatabase drops every
  * table, so force the in-memory SQLite connection before the framework boots.
- * The phpunit.xml <env> entries are not enough because the container exports
- * DB_CONNECTION/DB_DATABASE as real environment variables.
+ * The phpunit.xml <env> entries are not enough when the shell or container
+ * exports DB_CONNECTION/DB_DATABASE as real environment variables.
  */
 foreach ([
     'APP_ENV' => 'testing',

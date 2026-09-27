@@ -76,14 +76,9 @@ jobs:
               run: |
                   cp .env.example .env
                   php artisan key:generate
-                  sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
-                  {
-                    echo 'DB_HOST=127.0.0.1'
-                    echo 'DB_PORT=5432'
-                    echo 'DB_DATABASE=rotless'
-                    echo 'DB_USERNAME=rotless'
-                    echo 'DB_PASSWORD=rotless'
-                  } >> .env
+                  # .env.example already targets Postgres; the service container
+                  # listens on localhost instead of the compose host "db".
+                  sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
 
             - name: Run migrations against Postgres
               run: php artisan migrate --force
