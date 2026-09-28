@@ -1,0 +1,100 @@
+name: Deploy
+
+# Deploys main to the VPS after CI passes on it. The job uses the "production"
+# environment, which requires a manual approval (Settings > Environments), so
+# nothing reaches the VPS without an explicit confirmation.
+#
+# The runner builds the frontend and streams it to scripts/deploy.sh over SSH;
+# the VPS (1 GB e2-micro) only builds the PHP images. The SSH key is locked to
+# that script on the VPS (forced command in ~/.ssh/authorized_keys).
+#
+# This repository is public, and so are its Actions logs: the VPS address and
+# user are secrets so they stay masked, and deploy.sh prints no secrets.
+on:
+    workflow_run:
+        workflows: [CI]
+        types: [completed]
+        branches: [main]
+
+permissions:
+    contents: read
+
+# One deploy at a time; a queued run waits instead of cancelling the running one.
+concurrency:
+    group: deploy-production
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: Deploy to VPS
+        # Only CI runs of a push to main in this repository: a pull request from
+        # a fork whose branch is also named "main" matches the filter above too.
+        if: >-
+            github.event.workflow_run.conclusion == 'success' &&
+            github.event.workflow_run.event == 'push' &&
+            github.event.workflow_run.head_repository.full_name == github.repository
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        environment: production
+        steps:
+            - name: Checkout the commit CI tested
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  ref: ${{ github.event.workflow_run.head_sha }}
+                  persist-credentials: false
+
+            - name: Setup Node
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+              with:
+                  node-version: '22'
+                  cache: npm
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Build the frontend
+              working-directory: frontend
+              run: |
+                  npm ci
+                  npm run build
+
+            - name: Configure SSH
+              env:
+                  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+                  DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+              run: |
+                  for name in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_HOST DEPLOY_USER; do
+                    if [ -z "${!name}" ]; then
+                      echo "::error::Secret ${name} is not set in the production environment."
+                      exit 1
+                    fi
+                  done
+                  install -d -m 700 ~/.ssh
+                  printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+                  chmod 600 ~/.ssh/deploy_key
+                  # The VPS host key, pinned: never trust whatever answers.
+                  printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+            - name: Deploy
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+                  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+              # ServerAlive: a VPS that stops answering ends the session after
+              # ~10 minutes; the deploy itself keeps running there (see deploy.sh).
+              run: |
+                  tar -C frontend/dist -czf - . \
+                    | ssh -i ~/.ssh/deploy_key \
+                        -o IdentitiesOnly=yes \
+                        -o StrictHostKeyChecking=yes \
+                        -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+                        -o ConnectTimeout=20 \
+                        -o ServerAliveInterval=30 \
+                        -o ServerAliveCountMax=20 \
+                        -p "$DEPLOY_PORT" \
+                        "${DEPLOY_USER}@${DEPLOY_HOST}" "$DEPLOY_SHA"
+
+            - name: Remove the SSH key
+              if: always()
+              run: rm -f ~/.ssh/deploy_key

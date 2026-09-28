@@ -14,9 +14,15 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
+# Dependencies first: this layer is reused while composer.json/composer.lock
+# are unchanged, so a code-only deploy skips `composer install` (slow and
+# memory-hungry on the 1 GB VPS). Scripts need the app code, so they run below.
+COPY composer.json composer.lock ./
+RUN composer install --no-interaction --prefer-dist --no-scripts --no-autoloader
+
 COPY . .
 
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+RUN composer dump-autoload --optimize
 
 EXPOSE 8000
 
