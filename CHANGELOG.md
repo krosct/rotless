@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Deploy workflow: after CI passes on `main` and the `production` environment
+  is approved, the frontend is built on the runner and `scripts/deploy.sh`
+  deploys the commit on the VPS (database backup, additive migrations, health
+  check and automatic rollback).
+
+### Changed
+
+- The Docker image installs Composer dependencies in their own layer, so
+  code-only rebuilds skip `composer install`.
+
 ## 0.1.0 - 2026-09-24
 
 First release of **rotless**, a smart pantry web app that tracks household
