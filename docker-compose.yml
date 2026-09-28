@@ -6,6 +6,14 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
+    # The FrankenPHP image checks its admin API, which docker/frankenphp/Caddyfile
+    # turns off; probe Laravel's /up route instead (no DB, not exposed by Caddy).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8000/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -28,12 +36,13 @@ services:
       - -c
       - maintenance_work_mem=32MB
     # Same credentials the app reads from .env (DB_*). They only apply when the
-    # db-data volume is first created; changing them later does not alter an
-    # existing database.
+    # db-data volume is first created; to rotate the password of an existing
+    # database run ALTER USER, then update DB_PASSWORD in .env.
+    # There is no default password: compose refuses to start without one.
     environment:
       POSTGRES_DB: ${DB_DATABASE:-rotless}
       POSTGRES_USER: ${DB_USERNAME:-rotless}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-rotless}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (e.g. openssl rand -hex 32)}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -50,6 +59,9 @@ services:
       network: host
     restart: unless-stopped
     command: ["php", "artisan", "queue:work"]
+    # Runs an artisan command, not the web server: no HTTP health check.
+    healthcheck:
+      disable: true
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -63,6 +75,9 @@ services:
       network: host
     restart: unless-stopped
     command: ["php", "artisan", "schedule:work"]
+    # Runs an artisan command, not the web server: no HTTP health check.
+    healthcheck:
+      disable: true
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -81,12 +96,14 @@ services:
       - app
     environment:
       APP_URL: ${APP_URL:-}
+    # HTTPS only: Cloudflare connects to the origin on 443.
     ports:
-      - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend/dist:/srv:ro
+      # Cloudflare Origin Certificate (origin.pem + origin.key), only on the server.
+      - ./certs:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config
 

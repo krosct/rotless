@@ -10,4 +10,9 @@ public/hot
 storage/*.key
 tests
 .phpunit.result.cache
-.phpunit.cache
+.phpunit.cache# Runtime files written by running containers (logs, caches, test disks).
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing

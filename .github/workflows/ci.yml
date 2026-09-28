@@ -50,7 +50,7 @@ jobs:
                 env:
                     POSTGRES_DB: rotless
                     POSTGRES_USER: rotless
-                    POSTGRES_PASSWORD: rotless
+                    POSTGRES_PASSWORD: ci-only-password
                 ports:
                     - 5432:5432
                 options: >-
@@ -79,6 +79,7 @@ jobs:
                   # .env.example already targets Postgres; the service container
                   # listens on localhost instead of the compose host "db".
                   sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+                  sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=ci-only-password/' .env
 
             - name: Run migrations against Postgres
               run: php artisan migrate --force
