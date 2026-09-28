@@ -6,13 +6,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
-    environment:
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_DATABASE: rotless
-      DB_USERNAME: rotless
-      DB_PASSWORD: rotless
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -34,16 +27,19 @@ services:
       - work_mem=2MB
       - -c
       - maintenance_work_mem=32MB
+    # Same credentials the app reads from .env (DB_*). They only apply when the
+    # db-data volume is first created; changing them later does not alter an
+    # existing database.
     environment:
-      POSTGRES_DB: rotless
-      POSTGRES_USER: rotless
-      POSTGRES_PASSWORD: rotless
+      POSTGRES_DB: ${DB_DATABASE:-rotless}
+      POSTGRES_USER: ${DB_USERNAME:-rotless}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rotless}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rotless -d rotless"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -54,13 +50,6 @@ services:
       network: host
     restart: unless-stopped
     command: ["php", "artisan", "queue:work"]
-    environment:
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_DATABASE: rotless
-      DB_USERNAME: rotless
-      DB_PASSWORD: rotless
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
@@ -74,13 +63,6 @@ services:
       network: host
     restart: unless-stopped
     command: ["php", "artisan", "schedule:work"]
-    environment:
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_DATABASE: rotless
-      DB_USERNAME: rotless
-      DB_PASSWORD: rotless
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
