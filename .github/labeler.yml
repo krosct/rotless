@@ -1,0 +1,43 @@
+# Path-based labels, applied automatically by .github/workflows/labeler.yml.
+# Each key must match an existing label declared in .github/labels.yml.
+
+"area: frontend":
+    - changed-files:
+          - any-glob-to-any-file:
+                - frontend/**
+
+"area: backend":
+    - changed-files:
+          - any-glob-to-any-file:
+                - app/**
+                - routes/**
+                - config/**
+                - bootstrap/**
+                - resources/**
+                - tests/**
+
+"area: database":
+    - changed-files:
+          - any-glob-to-any-file:
+                - database/**
+
+"area: infra":
+    - changed-files:
+          - any-glob-to-any-file:
+                - Dockerfile
+                - .dockerignore
+                - docker/**
+                - docker-compose*.yml
+                - Caddyfile*
+                - scripts/**
+                - vite.config.js
+
+"area: ci":
+    - changed-files:
+          - any-glob-to-any-file:
+                - .github/**
+
+"area: docs":
+    - changed-files:
+          - any-glob-to-any-file:
+                - "**/*.md"
