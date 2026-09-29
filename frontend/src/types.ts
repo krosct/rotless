@@ -42,16 +42,66 @@ export interface HouseholdActor {
   is_member: boolean;
 }
 
-export interface MemberActivity {
-  batch_id: number;
-  product_name: string;
-  quantity: number;
-  expires_at: string;
-  status: BatchStatus;
-  created_at?: string | null;
-  updated_at?: string | null;
-  created_by?: BatchActor | null;
-  updated_by?: BatchActor | null;
+export type MovementAction =
+  | 'created'
+  | 'updated'
+  | 'consumed'
+  | 'discarded'
+  | 'deleted'
+  | 'product_updated'
+  | 'household_renamed'
+  | 'member_invited'
+  | 'member_joined'
+  | 'member_removed'
+  | 'member_role_changed';
+
+export interface MovementChange {
+  from: string | number | null;
+  to: string | number | null;
+}
+
+/** One entry of the household history (household_movements). */
+export interface Movement {
+  id: number;
+  action: MovementAction;
+  created_at: string;
+  user: BatchActor | null;
+  subject: BatchActor | null;
+  batch_id: number | null;
+  product_name: string | null;
+  quantity: number | null;
+  /** Field -> change; `backfilled: true` marks entries rebuilt from old data. */
+  changes: Record<string, MovementChange | boolean> | null;
+}
+
+export interface MovementPage {
+  data: Movement[];
+  meta: { next_before: number | null };
+}
+
+export interface ReportTotals {
+  added_units: number;
+  consumed_units: number;
+  discarded_units: number;
+  use_rate: number | null;
+}
+
+export interface HouseholdReport {
+  period: { days: 7 | 30 | 90; from: string; to: string; timezone: string; bucket: 'day' | 'week' };
+  totals: ReportTotals & { operations: number; avg_days_to_consume: number | null };
+  previous: ReportTotals;
+  timeline: { date: string; consumed: number; discarded: number }[];
+  top_consumed: { product_name: string; units: number }[];
+  top_discarded: { product_name: string; units: number }[];
+  members: {
+    user: BatchActor;
+    is_member: boolean;
+    added: number;
+    consumed: number;
+    discarded: number;
+    other: number;
+    total: number;
+  }[];
 }
 
 export interface Household {

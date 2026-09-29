@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { apiClient, ApiError, getToken } from '@/api/client';
-import { createBatch, deleteBatch, listBatches, updateBatch } from '@/api/batches';
+import { consumeBatch, createBatch, deleteBatch, listBatches, updateBatch } from '@/api/batches';
 import { getMe, logout } from '@/api/auth';
-import { listHouseholdActivities, listMembers, removeMember } from '@/api/households';
+import { getHouseholdReport, listHouseholdActivities, listMembers, removeMember } from '@/api/households';
 import { format } from 'date-fns';
 import { startDemo } from './demoApi';
 import { DEMO_TOKEN, clearDemoDb, isDemoActive } from './session';
@@ -65,15 +65,66 @@ describe('demo API', () => {
     await expect(removeMember(household.id, owner.id)).rejects.toBeInstanceOf(ApiError);
   });
 
-  it('filters activities like the API', async () => {
+  it('filters and pages the history like the API', async () => {
     const household = (await getMe()).user.households![0];
-    const updated = await listHouseholdActivities(household.id, { action: 'updated' });
-    const discarded = await listHouseholdActivities(household.id, { status: 'discarded' });
+    const first = await listHouseholdActivities(household.id);
+    const second = await listHouseholdActivities(household.id, { before: first.meta.next_before! });
+    const discarded = await listHouseholdActivities(household.id, { action: 'discarded' });
+    const members = await listHouseholdActivities(household.id, { action: 'members' });
 
-    expect(updated.length).toBeGreaterThan(0);
-    expect(updated.every((row) => row.updated_by?.id !== row.created_by?.id)).toBe(true);
-    expect(discarded).toHaveLength(6);
+    expect(first.data).toHaveLength(50);
+    expect(first.data[0].id).toBeGreaterThan(first.data[49].id);
+    expect(second.data[0].id).toBeLessThan(first.data[49].id);
+    expect(discarded.data).toHaveLength(6);
+    expect(members.data.map((row) => row.action)).toContain('member_role_changed');
     expect((await listMembers(household.id)).every((member) => (member.operations_count ?? 0) > 0)).toBe(true);
+  });
+
+  it('records every operation of the session, with what changed', async () => {
+    const household = (await getMe()).user.households![0];
+    const batch = await createBatch({
+      household_id: household.id,
+      name: 'Queijo coalho',
+      quantity: 5,
+      expires_at: format(new Date(), 'yyyy-MM-dd'),
+    });
+
+    await consumeBatch(batch.id, { quantity: 2, action: 'consumed' });
+    await consumeBatch(batch.id, { quantity: 3, action: 'discarded' });
+    await deleteBatch(batch.id);
+
+    const { data } = await listHouseholdActivities(household.id, { search: 'coalho' });
+    expect(data.map((row) => row.action)).toEqual(['deleted', 'discarded', 'consumed', 'created']);
+    expect(data.every((row) => row.user?.id === DEMO_ME_ID)).toBe(true);
+    expect(data[2]).toMatchObject({ quantity: 2, changes: { quantity: { from: 5, to: 3 } } });
+    expect(data[1]).toMatchObject({ quantity: 3, changes: { status: { from: 'active', to: 'discarded' } } });
+  });
+
+  it('rejects consuming more than what is left', async () => {
+    const household = (await getMe()).user.households![0];
+    const batch = await createBatch({
+      household_id: household.id,
+      name: 'Pão',
+      quantity: 1,
+      expires_at: format(new Date(), 'yyyy-MM-dd'),
+    });
+
+    await expect(consumeBatch(batch.id, { quantity: 2, action: 'consumed' })).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('builds the reports from the history', async () => {
+    const household = (await getMe()).user.households![0];
+    const report = await getHouseholdReport(household.id, 90);
+
+    expect(report.period.bucket).toBe('week');
+    expect(report.totals.consumed_units).toBeGreaterThan(0);
+    expect(report.totals.discarded_units).toBeGreaterThan(0);
+    expect(report.totals.use_rate).toBeGreaterThan(0);
+    expect(report.totals.use_rate).toBeLessThan(1);
+    expect(report.timeline.reduce((sum, point) => sum + point.discarded, 0)).toBe(report.totals.discarded_units);
+    expect(report.top_discarded.length).toBeGreaterThan(0);
+    expect(report.members).toHaveLength(5);
+    expect(report.members.reduce((sum, member) => sum + member.total, 0)).toBe(report.totals.operations);
   });
 
   it('asks the server only for the Telegram demo link', async () => {

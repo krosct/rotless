@@ -51,6 +51,28 @@ export function useUpdateBatch() {
   });
 }
 
+export function useConsumeBatch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number | string; input: { quantity: number; action: 'consumed' | 'discarded' } }) =>
+      batchesApi.consumeBatch(id, input),
+    onSuccess: (batch, { input }) => {
+      queryClient.invalidateQueries({ queryKey: BATCHES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['batch', String(batch.id)] });
+      const units = `${input.quantity} un`;
+      toast.success(
+        input.action === 'consumed'
+          ? `${units} de "${batch.product.name}" consumida(s).`
+          : `${units} de "${batch.product.name}" descartada(s).`
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao registrar a operação.');
+    },
+  });
+}
+
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
 

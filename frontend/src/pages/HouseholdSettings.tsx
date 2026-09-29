@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { MemberList } from '@/components/household/MemberList';
 import { updateHousehold } from '@/api/households';
-import { ArrowLeft, Home, ShieldAlert, History, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Home, ShieldAlert, History, BarChart3, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function HouseholdSettings() {
@@ -166,17 +166,30 @@ export function HouseholdSettings() {
 
               <CardFooter>
                 <span className="text-xs text-stone-500 dark:text-stone-400">
-                  O histórico de operações fica disponível para o proprietário e gerentes.
+                  O histórico e os relatórios ficam disponíveis para o proprietário e gerentes.
                 </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => navigate(`/households/${household.id}/activities`)}
-                >
-                  <History className="w-3.5 h-3.5 mr-1" />
-                  Ver histórico
-                </Button>
+                {canManageMembers && (
+                  <div className="flex flex-col items-stretch sm:items-end gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => navigate(`/households/${household.id}/activities`)}
+                    >
+                      <History className="w-3.5 h-3.5 mr-1" />
+                      Ver histórico
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => navigate(`/households/${household.id}/reports`)}
+                    >
+                      <BarChart3 className="w-3.5 h-3.5 mr-1" />
+                      Ver relatórios
+                    </Button>
+                  </div>
+                )}
               </CardFooter>
             </Card>
 

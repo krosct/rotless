@@ -1,7 +1,8 @@
-import { differenceInCalendarDays, parseISO, startOfDay } from 'date-fns';
+import { addDays, differenceInCalendarDays, differenceInHours, format, parseISO, startOfDay, startOfWeek } from 'date-fns';
 import { ApiError } from '@/api/client';
 import { clearDemoDb, readDemoDb, writeDemoDb } from './session';
-import { buildDemoDb, DEMO_CATALOG, DemoBatch, DemoDb } from './demoData';
+import { buildDemoDb, DEMO_CATALOG, DemoBatch, DemoDb, DemoMovement } from './demoData';
+import type { HouseholdReport, MovementAction, MovementChange } from '@/types';
 
 // The API of the demo mode: same routes, payloads and rules as the Laravel
 // API (app/Http/Controllers/Api/V1), answered from the demo database in
@@ -95,7 +96,48 @@ function serializeBatch(db: DemoDb, batch: DemoBatch) {
 }
 
 function operationsCount(db: DemoDb, userId: number): number {
-  return db.batches.filter((batch) => batch.created_by === userId || batch.updated_by === userId).length;
+  return db.movements.filter((movement) => movement.user_id === userId).length;
+}
+
+const MEMBER_ACTIONS: MovementAction[] = [
+  'household_renamed',
+  'member_invited',
+  'member_joined',
+  'member_removed',
+  'member_role_changed',
+];
+
+type Changes = Record<string, [string | number | null, string | number | null]>;
+
+function formatChanges(changes: Changes): Record<string, MovementChange> | null {
+  const result: Record<string, MovementChange> = {};
+  for (const [field, [from, to]] of Object.entries(changes)) {
+    if (from !== to) result[field] = { from, to };
+  }
+  return Object.keys(result).length === 0 ? null : result;
+}
+
+// Same as HouseholdMovement::forBatch / forHousehold.
+function record(
+  db: DemoDb,
+  movement: Omit<DemoMovement, 'id' | 'created_at' | 'changes' | 'user_id'> & { changes?: Changes }
+): void {
+  db.movements.push({
+    ...movement,
+    id: db.next_movement_id++,
+    created_at: nowIso(),
+    user_id: db.me_id,
+    changes: formatChanges(movement.changes ?? {}),
+  });
+}
+
+function recordBatch(db: DemoDb, batch: DemoBatch, action: MovementAction, quantity: number | null, changes: Changes): void {
+  const product = db.products.find((item) => item.id === batch.product_id)!;
+  record(db, { action, batch_id: batch.id, product_name: product.name, quantity, subject_user_id: null, changes });
+}
+
+function recordHousehold(db: DemoDb, action: MovementAction, subjectId: number | null, changes: Changes = {}): void {
+  record(db, { action, batch_id: null, product_name: null, quantity: null, subject_user_id: subjectId, changes });
 }
 
 function serializeMembers(db: DemoDb, count: (userId: number) => number) {
@@ -115,8 +157,7 @@ function serializeMembers(db: DemoDb, count: (userId: number) => number) {
 function serializeMe(db: DemoDb) {
   const me = db.users.find((user) => user.id === db.me_id)!;
   const role = db.memberships.find((membership) => membership.user_id === db.me_id)!.role;
-  // /me counts created batches only (AuthController::serializeUser).
-  const created = (userId: number) => db.batches.filter((batch) => batch.created_by === userId).length;
+  const created = (userId: number) => operationsCount(db, userId);
   return {
     id: me.id,
     name: me.name,
@@ -200,6 +241,101 @@ async function refreshTelegramLink(db: DemoDb): Promise<void> {
   } catch {
     // The profile still answers; the next poll tries again.
   }
+}
+
+// --- Reports (same rules as ReportController) ---------------------------------
+
+function totalsOf(movements: DemoMovement[]) {
+  const units = (action: MovementAction) =>
+    movements.filter((movement) => movement.action === action).reduce((sum, movement) => sum + (movement.quantity ?? 0), 0);
+  const consumed = units('consumed');
+  const discarded = units('discarded');
+  return {
+    added_units: units('created'),
+    consumed_units: consumed,
+    discarded_units: discarded,
+    use_rate: consumed + discarded === 0 ? null : Math.round((consumed / (consumed + discarded)) * 10000) / 10000,
+  };
+}
+
+function topProducts(movements: DemoMovement[], action: MovementAction) {
+  const byName = new Map<string, number>();
+  for (const movement of movements) {
+    if (movement.action !== action || !movement.product_name) continue;
+    byName.set(movement.product_name, (byName.get(movement.product_name) ?? 0) + (movement.quantity ?? 0));
+  }
+  return [...byName.entries()]
+    .map(([product_name, units]) => ({ product_name, units }))
+    .sort((a, b) => b.units - a.units)
+    .slice(0, 5);
+}
+
+export function buildReport(db: DemoDb, days: 7 | 30 | 90, now: Date = new Date()): HouseholdReport {
+  const today = startOfDay(now);
+  const start = addDays(today, -(days - 1));
+  const previousStart = addDays(start, -days);
+  const bucket = days === 90 ? 'week' : 'day';
+
+  const inWindow = db.movements.filter((movement) => new Date(movement.created_at) >= previousStart);
+  const current = inWindow.filter((movement) => new Date(movement.created_at) >= start);
+  const previous = inWindow.filter((movement) => new Date(movement.created_at) < start);
+
+  const keyOf = (date: Date) => format(bucket === 'week' ? startOfWeek(date, { weekStartsOn: 1 }) : date, 'yyyy-MM-dd');
+  const points = new Map<string, { date: string; consumed: number; discarded: number }>();
+  for (
+    let cursor = bucket === 'week' ? startOfWeek(start, { weekStartsOn: 1 }) : start;
+    cursor <= today;
+    cursor = addDays(cursor, bucket === 'week' ? 7 : 1)
+  ) {
+    const key = format(cursor, 'yyyy-MM-dd');
+    points.set(key, { date: key, consumed: 0, discarded: 0 });
+  }
+  for (const movement of current) {
+    if (movement.action !== 'consumed' && movement.action !== 'discarded') continue;
+    const point = points.get(keyOf(new Date(movement.created_at)));
+    if (point) point[movement.action] += movement.quantity ?? 0;
+  }
+
+  const createdAt = new Map(db.batches.map((batch) => [batch.id, batch.created_at]));
+  const spans = current
+    .filter((movement) => movement.action === 'consumed' && movement.batch_id !== null && createdAt.has(movement.batch_id))
+    .map((movement) => Math.max(0, differenceInHours(new Date(movement.created_at), new Date(createdAt.get(movement.batch_id!)!))) / 24);
+
+  const memberIds = db.memberships.map((membership) => membership.user_id);
+  const ids = new Set([...memberIds, ...current.map((movement) => movement.user_id).filter((id): id is number => id !== null)]);
+  const members = db.users
+    .filter((user) => ids.has(user.id))
+    .map((user) => {
+      const own = current.filter((movement) => movement.user_id === user.id);
+      const count = (action: MovementAction) => own.filter((movement) => movement.action === action).length;
+      const added = count('created');
+      const consumed = count('consumed');
+      const discarded = count('discarded');
+      return {
+        user: { id: user.id, name: user.name },
+        is_member: memberIds.includes(user.id),
+        added,
+        consumed,
+        discarded,
+        other: own.length - added - consumed - discarded,
+        total: own.length,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    period: { days, from: format(start, 'yyyy-MM-dd'), to: format(today, 'yyyy-MM-dd'), timezone: 'local', bucket },
+    totals: {
+      ...totalsOf(current),
+      operations: current.length,
+      avg_days_to_consume: spans.length === 0 ? null : Math.round((spans.reduce((a, b) => a + b, 0) / spans.length) * 10) / 10,
+    },
+    previous: totalsOf(previous),
+    timeline: [...points.values()],
+    top_consumed: topProducts(current, 'consumed'),
+    top_discarded: topProducts(current, 'discarded'),
+    members,
+  };
 }
 
 // --- Routes -------------------------------------------------------------------
@@ -294,6 +430,7 @@ const routes: [string, RegExp, Handler][] = [
       updated_by: db.me_id,
     };
     db.batches.push(batch);
+    recordBatch(db, batch, 'created', quantity, { quantity: [null, quantity], expires_at: [null, expiresAt] });
     return { data: serializeBatch(db, batch) };
   }],
 
@@ -315,15 +452,59 @@ const routes: [string, RegExp, Handler][] = [
       throw validationError('status', 'The selected status is invalid.');
     }
 
+    const before = { quantity: batch.quantity, expires_at: batch.expires_at, status: batch.status };
     if (quantity !== undefined) batch.quantity = validQuantity(quantity)!;
     if (expiresAt !== undefined) batch.expires_at = expiresAt as string;
     if (status !== undefined) batch.status = status as DemoBatch['status'];
     touch(batch, db);
+
+    const changes: Changes = {
+      quantity: [before.quantity, batch.quantity],
+      expires_at: [before.expires_at, batch.expires_at],
+      status: [before.status, batch.status],
+    };
+    if (formatChanges(changes) !== null) {
+      const action: MovementAction =
+        before.status === 'active' && batch.status === 'consumed'
+          ? 'consumed'
+          : before.status === 'active' && batch.status === 'discarded'
+          ? 'discarded'
+          : 'updated';
+      recordBatch(db, batch, action, action === 'updated' ? null : batch.quantity, changes);
+    }
+    return { data: serializeBatch(db, batch) };
+  }],
+
+  ['POST', /^\/api\/v1\/batches\/(\d+)\/consume$/, ({ db, params, body }) => {
+    const batch = findBatch(db, params[0]);
+    const units = validQuantity(field(body, 'quantity'));
+    const action = field(body, 'action');
+    if (units === null) throw validationError('quantity', 'The quantity field must be at least 1.');
+    if (action !== 'consumed' && action !== 'discarded') throw validationError('action', 'The selected action is invalid.');
+    if (batch.status !== 'active') throw validationError('action', 'Only active batches can be consumed or discarded.');
+    if (units > batch.quantity) throw validationError('quantity', 'The quantity is larger than what is left in this batch.');
+
+    const all = units === batch.quantity;
+    const changes: Changes = all
+      ? { status: ['active', action] }
+      : { quantity: [batch.quantity, batch.quantity - units] };
+    if (all) {
+      batch.status = action;
+    } else {
+      batch.quantity -= units;
+    }
+    touch(batch, db);
+    recordBatch(db, batch, action, units, changes);
     return { data: serializeBatch(db, batch) };
   }],
 
   ['DELETE', /^\/api\/v1\/batches\/(\d+)$/, ({ db, params }) => {
     const batch = findBatch(db, params[0]);
+    recordBatch(db, batch, 'deleted', batch.quantity, {
+      quantity: [batch.quantity, null],
+      expires_at: [batch.expires_at, null],
+      status: [batch.status, null],
+    });
     db.batches = db.batches.filter((item) => item.id !== batch.id);
     return '';
   }],
@@ -339,8 +520,14 @@ const routes: [string, RegExp, Handler][] = [
     if (!product) throw notFound();
     const name = field(body, 'name');
     const photo = field(body, 'photo');
+    const before = product.name;
     if (typeof name === 'string' && name.trim() !== '') product.name = name.trim();
     if (photo instanceof File) product.photo_url = await fileToDataUrl(photo);
+    const changes: Changes = { name: [before, product.name] };
+    if (photo instanceof File) changes.photo = [null, 'updated'];
+    if (formatChanges(changes) !== null) {
+      record(db, { action: 'product_updated', batch_id: null, product_name: product.name, quantity: null, subject_user_id: null, changes });
+    }
     return { data: product };
   }],
 
@@ -350,7 +537,9 @@ const routes: [string, RegExp, Handler][] = [
     if (typeof name !== 'string' || name.trim().length < 2) {
       throw validationError('name', 'The name field must be at least 2 characters.');
     }
+    const before = db.household.name;
     db.household.name = name.trim();
+    if (before !== db.household.name) recordHousehold(db, 'household_renamed', null, { name: [before, db.household.name] });
     return { message: 'Household updated.', household: { ...db.household } };
   }],
 
@@ -362,7 +551,7 @@ const routes: [string, RegExp, Handler][] = [
   ['GET', /^\/api\/v1\/households\/(\d+)\/actors$/, ({ db, params }) => {
     assertHousehold(db, params[0]);
     const memberIds = db.memberships.map((membership) => membership.user_id);
-    const operatorIds = db.batches.flatMap((batch) => [batch.created_by, batch.updated_by]);
+    const operatorIds = db.movements.map((movement) => movement.user_id);
     const ids = new Set([...memberIds, ...operatorIds].filter((id): id is number => id !== null));
     return {
       data: db.users
@@ -376,37 +565,41 @@ const routes: [string, RegExp, Handler][] = [
     assertHousehold(db, params[0]);
     const userId = query.get('user_id') ? Number(query.get('user_id')) : null;
     const action = query.get('action');
-    const status = query.get('status');
     const search = query.get('search')?.toLocaleLowerCase('pt-BR');
+    const before = query.get('before') ? Number(query.get('before')) : null;
+    const limit = Math.min(100, Number(query.get('limit') ?? 50));
 
-    const rows = db.batches
-      .filter((batch) => userId === null || batch.created_by === userId || batch.updated_by === userId)
-      .filter((batch) => action !== 'created' || batch.created_by !== null)
-      .filter((batch) => action !== 'updated' || (batch.updated_by !== null && batch.updated_by !== batch.created_by))
-      .filter((batch) => !status || batch.status === status)
-      .filter((batch) => {
-        if (!search) return true;
-        const product = db.products.find((item) => item.id === batch.product_id)!;
-        return product.name.toLocaleLowerCase('pt-BR').includes(search);
-      })
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    const rows = db.movements
+      .filter((movement) => userId === null || movement.user_id === userId)
+      .filter((movement) =>
+        !action ? true : action === 'members' ? MEMBER_ACTIONS.includes(movement.action) : movement.action === action
+      )
+      .filter((movement) => !search || (movement.product_name ?? '').toLocaleLowerCase('pt-BR').includes(search))
+      .filter((movement) => before === null || movement.id < before)
+      .sort((a, b) => b.id - a.id);
 
+    const page = rows.slice(0, limit);
     return {
-      data: rows.map((batch) => {
-        const full = serializeBatch(db, batch);
-        return {
-          batch_id: full.id,
-          product_name: full.product.name,
-          quantity: full.quantity,
-          expires_at: full.expires_at,
-          status: full.status,
-          created_at: full.created_at,
-          updated_at: full.updated_at,
-          created_by: full.created_by,
-          updated_by: full.updated_by,
-        };
-      }),
+      data: page.map((movement) => ({
+        id: movement.id,
+        action: movement.action,
+        created_at: movement.created_at,
+        user: actor(db, movement.user_id),
+        subject: actor(db, movement.subject_user_id),
+        batch_id: movement.batch_id,
+        product_name: movement.product_name,
+        quantity: movement.quantity,
+        changes: movement.changes,
+      })),
+      meta: { next_before: rows.length > limit ? page[page.length - 1].id : null },
     };
+  }],
+
+  ['GET', /^\/api\/v1\/households\/(\d+)\/reports$/, ({ db, params, query }) => {
+    assertHousehold(db, params[0]);
+    const days = Number(query.get('days') ?? 30);
+    if (![7, 30, 90].includes(days)) throw validationError('days', 'The selected days is invalid.');
+    return { data: buildReport(db, days as 7 | 30 | 90) };
   }],
 
   ['DELETE', /^\/api\/v1\/households\/(\d+)\/members\/(\d+)$/, ({ db, params }) => {
@@ -417,6 +610,7 @@ const routes: [string, RegExp, Handler][] = [
       throw new ApiError(422, 'The owner cannot be removed.', { message: 'The owner cannot be removed.' });
     }
     db.memberships = db.memberships.filter((item) => item !== membership);
+    recordHousehold(db, 'member_removed', membership.user_id);
     return { message: 'Member removed.' };
   }],
 
@@ -429,7 +623,9 @@ const routes: [string, RegExp, Handler][] = [
     if (membership.role === 'owner') {
       throw new ApiError(422, 'The owner role cannot be changed.', { message: 'The owner role cannot be changed.' });
     }
+    const before = membership.role;
     membership.role = role;
+    if (before !== role) recordHousehold(db, 'member_role_changed', membership.user_id, { role: [before, role] });
     return { message: 'Member role updated.', member: { id: membership.user_id, role } };
   }],
 
@@ -439,6 +635,7 @@ const routes: [string, RegExp, Handler][] = [
     if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email)) {
       throw validationError('email', 'The email field must be a valid email address.');
     }
+    recordHousehold(db, 'member_invited', null, { email: [null, email] });
     return {
       message: 'Invitation created.',
       invitation: {

@@ -1,5 +1,5 @@
 import { addDays, addMinutes, differenceInCalendarDays, format, startOfDay } from 'date-fns';
-import type { BatchStatus, HouseholdRole } from '@/types';
+import type { BatchStatus, HouseholdRole, MovementAction, MovementChange } from '@/types';
 
 // The demo database: one household with five people and a history of 100
 // operations, replayed in order so every batch ends up exactly as the real
@@ -44,11 +44,17 @@ export interface DemoBatch {
 
 export type DemoOperationType = 'create' | 'edit' | 'consume_partial' | 'consume' | 'discard' | 'delete';
 
-export interface DemoOperation {
-  at: string;
-  user_id: number;
-  type: DemoOperationType;
-  batch_id: number;
+/** A row of household_movements, as the API stores it. */
+export interface DemoMovement {
+  id: number;
+  action: MovementAction;
+  created_at: string;
+  user_id: number | null;
+  subject_user_id: number | null;
+  batch_id: number | null;
+  product_name: string | null;
+  quantity: number | null;
+  changes: Record<string, MovementChange> | null;
 }
 
 export interface DemoDb {
@@ -60,7 +66,8 @@ export interface DemoDb {
   memberships: DemoMembership[];
   products: DemoProduct[];
   batches: DemoBatch[];
-  operations: DemoOperation[];
+  movements: DemoMovement[];
+  next_movement_id: number;
   next_batch_id: number;
   next_product_id: number;
   telegram: {
@@ -166,9 +173,12 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
   const today = startOfDay(now);
   const latest = addMinutes(now, -2);
   // A time of day on `day` (7h-22h), never later than a couple of minutes ago.
+  // Opened early in the morning, "today" has no daytime yet: use last evening.
   const timeOn = (day: Date): Date => {
     const at = addMinutes(startOfDay(day), int(7 * 60, 22 * 60));
-    return at > latest ? addMinutes(latest, -int(3, 120)) : at;
+    if (at <= latest) return at;
+    const earlier = addMinutes(latest, -int(3, 120));
+    return earlier >= addMinutes(startOfDay(day), 7 * 60) ? earlier : timeOn(addDays(day, -1));
   };
   // A moment between `from` and `to`, never in the future. When `from` itself
   // is too recent, it is squeezed to "just now" (still after the batch was
@@ -177,7 +187,13 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
     const end = to > latest ? latest : to;
     const start = from > end ? end : from;
     const span = Math.floor((end.getTime() - start.getTime()) / 60000);
-    return addMinutes(start, span > 0 ? int(1, span) : 0);
+    const at = addMinutes(start, span > 0 ? int(1, span) : 0);
+    // People use the pantry in the daytime: move night times into 7h-22h of
+    // the same day when that still falls inside the range.
+    const minutes = at.getHours() * 60 + at.getMinutes();
+    if (minutes >= 7 * 60 && minutes <= 22 * 60) return at;
+    const daytime = addMinutes(startOfDay(at), int(7 * 60, 22 * 60));
+    return daytime > start && daytime <= end ? daytime : at;
   };
 
   const perishable = DEMO_CATALOG.filter((item) => item.shelfDays <= 21);
@@ -193,6 +209,9 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
     const item = pick(fate === 'ok' ? lasting : fate === 'overdue' || fate === 'soon' ? perishable : DEMO_CATALOG);
 
     let expiry: Date;
+    // Consumed and discarded batches start from the day it happened, spread
+    // over the month, so the reports show a history instead of a spike.
+    let eventDay: Date | null = null;
     switch (fate) {
       case 'overdue':
         expiry = addDays(today, -overdueDays.pop()!);
@@ -204,18 +223,21 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
         expiry = addDays(today, int(4, Math.max(8, Math.min(item.shelfDays, 90))));
         break;
       case 'discarded':
-        expiry = addDays(today, -int(0, 8));
+        // Thrown away once expired.
+        eventDay = addDays(today, -int(0, 28));
+        expiry = addDays(eventDay, -int(0, 2));
         break;
       case 'consumed':
-        expiry = addDays(today, int(-10, Math.min(item.shelfDays, 30)));
+        eventDay = addDays(today, -int(1, 30));
+        expiry = addDays(eventDay, int(0, Math.min(item.shelfDays, 10)));
         break;
       default:
         expiry = addDays(today, int(1, Math.min(item.shelfDays, 30)));
     }
 
-    // Bought some days before it expires, within the last 35 days.
-    const lastPossible = expiry < today ? addDays(expiry, -1) : today;
-    let createdDay = addDays(lastPossible, -int(0, Math.min(item.shelfDays, 20)));
+    // Bought some days before it expires (or is used), within the last 35 days.
+    const lastPossible = eventDay ?? (expiry < today ? addDays(expiry, -1) : today);
+    let createdDay = addDays(lastPossible, -int(eventDay ? 1 : 0, Math.min(item.shelfDays, eventDay ? 7 : 20)));
     if (differenceInCalendarDays(today, createdDay) > 35) {
       createdDay = addDays(today, -35);
     }
@@ -233,11 +255,12 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
       ops: [],
     };
 
-    if (fate === 'consumed') {
-      plan.ops.push({ type: 'consume', at: between(addMinutes(createdAt, 60), addDays(expiry, 1)) });
-    } else if (fate === 'discarded') {
-      const from = expiry > createdAt ? timeOn(expiry) : createdAt;
-      plan.ops.push({ type: 'discard', at: between(from < createdAt ? createdAt : from, latest) });
+    if (eventDay) {
+      const at = timeOn(eventDay);
+      plan.ops.push({
+        type: fate === 'consumed' ? 'consume' : 'discard',
+        at: at > createdAt ? at : between(createdAt, addMinutes(createdAt, 180)),
+      });
     } else if (fate === 'deleted') {
       // Registered by mistake and removed right after.
       plan.ops.push({ type: 'delete', at: between(createdAt, addMinutes(createdAt, 90)) });
@@ -280,64 +303,144 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
   // Who does what: a shuffled pool with each person's share of the 100.
   const actors = shuffle(PEOPLE.flatMap((person) => Array<number>(person.quota).fill(person.id)));
 
-  interface Event extends DemoOperation {
+  interface Event {
     plan: Plan;
     when: Date;
+    user_id: number;
+    type: DemoOperationType;
+    batch_id: number;
   }
   const events: Event[] = [];
   let nextBatchId = 900201;
   for (const plan of plans) {
     const batchId = nextBatchId++;
     const creator = actors.pop()!;
-    events.push({ at: '', when: plan.createdAt, user_id: creator, type: 'create', batch_id: batchId, plan });
+    events.push({ when: plan.createdAt, user_id: creator, type: 'create', batch_id: batchId, plan });
     for (const op of plan.ops) {
       // Removing a batch registered by mistake is done by whoever created it.
       const actor = op.type === 'delete' ? creator : actors.pop() ?? creator;
-      events.push({ at: '', when: op.at, user_id: actor, type: op.type, batch_id: batchId, plan });
+      events.push({ when: op.at, user_id: actor, type: op.type, batch_id: batchId, plan });
     }
   }
   events.sort((a, b) => a.when.getTime() - b.when.getTime());
 
-  // Replay, as the API would have applied each request.
+  // Member events: everyone but the owner joined through an invitation, and
+  // Marina was promoted to manager by the owner a few days later.
+  const memberships = PEOPLE.map((person) => ({
+    user_id: person.id,
+    role: person.role,
+    joined_at: timeOn(addDays(today, -person.joinedDaysAgo)).toISOString(),
+  }));
+  interface Pending {
+    when: Date;
+    movement: Omit<DemoMovement, 'id' | 'created_at'>;
+  }
+  const pending: Pending[] = [];
+  for (const membership of memberships) {
+    if (membership.user_id === DEMO_ME_ID) continue;
+    pending.push({
+      when: new Date(membership.joined_at),
+      movement: { action: 'member_joined', user_id: membership.user_id, subject_user_id: membership.user_id, batch_id: null, product_name: null, quantity: null, changes: null },
+    });
+  }
+  const manager = memberships.find((membership) => membership.role === 'manager')!;
+  pending.push({
+    when: addDays(new Date(manager.joined_at), 2),
+    movement: {
+      action: 'member_role_changed',
+      user_id: DEMO_ME_ID,
+      subject_user_id: manager.user_id,
+      batch_id: null,
+      product_name: null,
+      quantity: null,
+      changes: { role: { from: 'member', to: 'manager' } },
+    },
+  });
+
+  // Replay, as the API would have applied each request, recording each
+  // movement with what changed.
   const batches = new Map<number, DemoBatch>();
-  const operations: DemoOperation[] = [];
+  const change = (from: string | number | null, to: string | number | null): MovementChange => ({ from, to });
   for (const event of events) {
     const at = event.when.toISOString();
     const { plan } = event;
-    operations.push({ at, user_id: event.user_id, type: event.type, batch_id: event.batch_id });
+    const name = plan.item.name;
+    const base = { user_id: event.user_id, subject_user_id: null, batch_id: event.batch_id, product_name: name };
 
     if (event.type === 'create') {
+      const expiresAt = format(plan.initialExpiry, 'yyyy-MM-dd');
       batches.set(event.batch_id, {
         id: event.batch_id,
         product_id: productFor(plan.item),
         quantity: plan.initialQty,
-        expires_at: format(plan.initialExpiry, 'yyyy-MM-dd'),
+        expires_at: expiresAt,
         status: 'active',
         created_at: at,
         updated_at: at,
         created_by: event.user_id,
         updated_by: event.user_id,
       });
+      pending.push({
+        when: event.when,
+        movement: { ...base, action: 'created', quantity: plan.initialQty, changes: { quantity: change(null, plan.initialQty), expires_at: change(null, expiresAt) } },
+      });
       continue;
     }
 
     const batch = batches.get(event.batch_id);
     if (!batch) continue;
+
     if (event.type === 'delete') {
+      pending.push({
+        when: event.when,
+        movement: {
+          ...base,
+          action: 'deleted',
+          quantity: batch.quantity,
+          changes: {
+            quantity: change(batch.quantity, null),
+            expires_at: change(batch.expires_at, null),
+            status: change(batch.status, null),
+          },
+        },
+      });
       batches.delete(event.batch_id);
       continue;
     }
+
     if (event.type === 'edit') {
-      batch.expires_at = format(plan.finalExpiry, 'yyyy-MM-dd');
+      const finalExpiry = format(plan.finalExpiry, 'yyyy-MM-dd');
+      const changes: Record<string, MovementChange> = {};
+      if (batch.expires_at !== finalExpiry) changes.expires_at = change(batch.expires_at, finalExpiry);
+      if (batch.quantity !== plan.finalQty) changes.quantity = change(batch.quantity, plan.finalQty);
+      batch.expires_at = finalExpiry;
       batch.quantity = plan.finalQty;
+      pending.push({ when: event.when, movement: { ...base, action: 'updated', quantity: null, changes } });
     } else if (event.type === 'consume_partial') {
+      pending.push({
+        when: event.when,
+        movement: { ...base, action: 'consumed', quantity: batch.quantity - plan.finalQty, changes: { quantity: change(batch.quantity, plan.finalQty) } },
+      });
       batch.quantity = plan.finalQty;
     } else {
-      batch.status = event.type === 'consume' ? 'consumed' : 'discarded';
+      const status = event.type === 'consume' ? 'consumed' : 'discarded';
+      pending.push({
+        when: event.when,
+        movement: { ...base, action: status, quantity: batch.quantity, changes: { status: change('active', status) } },
+      });
+      batch.status = status;
     }
     batch.updated_at = at;
     batch.updated_by = event.user_id;
   }
+
+  // Ids follow time, like the auto-increment column.
+  pending.sort((a, b) => a.when.getTime() - b.when.getTime());
+  const movements: DemoMovement[] = pending.map((item, index) => ({
+    id: 900501 + index,
+    created_at: item.when.toISOString(),
+    ...item.movement,
+  }));
 
   return {
     version: 1,
@@ -345,14 +448,11 @@ export function buildDemoDb(now: Date = new Date()): DemoDb {
     me_id: DEMO_ME_ID,
     household: { id: HOUSEHOLD_ID, name: 'Casa Girassol' },
     users: PEOPLE.map(({ id, name, email }) => ({ id, name, email })),
-    memberships: PEOPLE.map((person) => ({
-      user_id: person.id,
-      role: person.role,
-      joined_at: timeOn(addDays(today, -person.joinedDaysAgo)).toISOString(),
-    })),
+    memberships,
     products,
     batches: [...batches.values()],
-    operations,
+    movements,
+    next_movement_id: 900501 + movements.length,
     next_batch_id: nextBatchId,
     next_product_id: nextProductId,
     telegram: { chat_id: null, chat_name: null, pending_token: null },

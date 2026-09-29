@@ -1,25 +1,152 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { listHouseholdActivities, listHouseholdActors, ActivityFilters } from '@/api/households';
-import { HouseholdActor, MemberActivity } from '@/types';
+import { HouseholdActor, Movement, MovementAction } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { formatDate } from '@/utils/format';
+import { ACTION_LABELS, describeAction, describeChanges, initials, isBackfilled } from '@/utils/movements';
+import { cn } from '@/utils/cn';
 import {
   ArrowLeft,
+  ArrowRight,
   Search,
   Loader2,
   Package,
   PlusCircle,
   Pencil,
-  Calendar,
+  CheckCircle2,
+  XCircle,
+  Trash2,
+  Tag,
+  Home,
+  Mail,
+  UserPlus,
+  UserMinus,
+  ShieldCheck,
+  LucideIcon,
 } from 'lucide-react';
 
-type ActionFilter = 'all' | 'created' | 'updated';
+type ActionFilter = '' | MovementAction | 'members';
+
+const ACTION_FILTERS: { value: ActionFilter; label: string }[] = [
+  { value: '', label: 'Todas as operações' },
+  { value: 'created', label: 'Inclusões' },
+  { value: 'updated', label: 'Edições' },
+  { value: 'consumed', label: 'Consumos' },
+  { value: 'discarded', label: 'Descartes' },
+  { value: 'deleted', label: 'Exclusões' },
+  { value: 'product_updated', label: 'Produtos editados' },
+  { value: 'members', label: 'Membros e despensa' },
+];
+
+const ACTION_STYLE: Record<MovementAction, { icon: LucideIcon; className: string }> = {
+  created: { icon: PlusCircle, className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' },
+  updated: { icon: Pencil, className: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300' },
+  consumed: { icon: CheckCircle2, className: 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300' },
+  discarded: { icon: XCircle, className: 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' },
+  deleted: { icon: Trash2, className: 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' },
+  product_updated: { icon: Tag, className: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300' },
+  household_renamed: { icon: Home, className: 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300' },
+  member_invited: { icon: Mail, className: 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300' },
+  member_joined: { icon: UserPlus, className: 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300' },
+  member_removed: { icon: UserMinus, className: 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300' },
+  member_role_changed: { icon: ShieldCheck, className: 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300' },
+};
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+function dayLabel(iso: string): string {
+  const days = differenceInCalendarDays(new Date(), parseISO(iso));
+  if (days === 0) return 'Hoje';
+  if (days === 1) return 'Ontem';
+  return formatDate(iso, "EEEE, d 'de' MMMM 'de' yyyy");
+}
+
+function groupByDay(movements: Movement[]): { day: string; label: string; items: Movement[] }[] {
+  const groups: { day: string; label: string; items: Movement[] }[] = [];
+  for (const movement of movements) {
+    const day = formatDate(movement.created_at, 'yyyy-MM-dd');
+    const last = groups[groups.length - 1];
+    if (last && last.day === day) {
+      last.items.push(movement);
+    } else {
+      groups.push({ day, label: dayLabel(movement.created_at), items: [movement] });
+    }
+  }
+  return groups;
+}
+
+function MovementItem({ movement }: { movement: Movement }) {
+  const style = ACTION_STYLE[movement.action];
+  const Icon = style.icon;
+  const lines = describeChanges(movement);
+  const who = movement.user?.name ?? 'Alguém';
+
+  return (
+    <li data-testid="movement" className="flex items-start gap-3 py-3.5">
+      <span
+        aria-hidden="true"
+        className="w-9 h-9 rounded-full bg-[#2d6a4f]/10 dark:bg-emerald-400/10 text-[#2d6a4f] dark:text-emerald-300 flex items-center justify-center text-xs font-bold shrink-0"
+      >
+        {initials(who)}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="text-sm text-stone-700 dark:text-stone-300">
+            <strong className="font-semibold text-stone-900 dark:text-white">{who}</strong> {describeAction(movement)}
+          </p>
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+              style.className
+            )}
+          >
+            <Icon className="w-3 h-3" aria-hidden="true" />
+            {ACTION_LABELS[movement.action]}
+          </span>
+        </div>
+
+        {lines.length > 0 && (
+          <ul className="mt-1.5 flex flex-col gap-0.5">
+            {lines.map((line) => (
+              <li key={line.label} className="text-xs text-stone-600 dark:text-stone-400 flex items-center gap-1.5 flex-wrap">
+                <span className="font-medium text-stone-500 dark:text-stone-500">{line.label}:</span>
+                {line.from !== null && line.to !== null ? (
+                  <>
+                    <span className="line-through decoration-stone-400/70">{line.from}</span>
+                    <ArrowRight className="w-3 h-3 text-stone-400" aria-label="para" />
+                    <span className="font-semibold text-stone-800 dark:text-stone-200">{line.to}</span>
+                  </>
+                ) : (
+                  <span className="font-semibold text-stone-800 dark:text-stone-200">{line.to ?? line.from}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isBackfilled(movement) && (
+          <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+            Registro reconstruído a partir de dados anteriores ao histórico detalhado.
+          </p>
+        )}
+      </div>
+
+      <time
+        dateTime={movement.created_at}
+        className="text-[11px] tabular-nums text-stone-400 dark:text-stone-500 shrink-0 pt-0.5"
+      >
+        {formatDate(movement.created_at, 'HH:mm')}
+      </time>
+    </li>
+  );
+}
 
 export function HouseholdActivities() {
   const { householdId } = useParams<{ householdId: string }>();
@@ -27,60 +154,81 @@ export function HouseholdActivities() {
   const navigate = useNavigate();
   const { currentHousehold } = useAuth();
 
-  const initialUserId = searchParams.get('user') ?? '';
-  const [userId, setUserId] = useState<string>(initialUserId);
-  const [activities, setActivities] = useState<MemberActivity[]>([]);
+  const [userId, setUserId] = useState<string>(searchParams.get('user') ?? '');
+  const [actionFilter, setActionFilter] = useState<ActionFilter>('');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [nextBefore, setNextBefore] = useState<number | null>(null);
   const [actors, setActors] = useState<HouseholdActor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('');
 
   const selectedActor = useMemo(
     () => actors.find((actor) => actor.id === Number(userId)) ?? null,
     [actors, userId]
   );
 
-  useEffect(() => {
-    async function loadActors() {
-      if (!householdId) return;
-      try {
-        const data = await listHouseholdActors(Number(householdId));
-        setActors(data);
-      } catch {
-        // Non-critical: the filter falls back to no options.
-      }
-    }
+  const filters = useMemo<ActivityFilters>(() => {
+    const value: ActivityFilters = {};
+    if (userId) value.userId = Number(userId);
+    if (actionFilter) value.action = actionFilter;
+    if (search) value.search = search;
+    return value;
+  }, [userId, actionFilter, search]);
 
-    loadActors();
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    if (!householdId) return;
+    listHouseholdActors(Number(householdId))
+      .then(setActors)
+      .catch(() => {
+        // Non-critical: the filter falls back to no options.
+      });
   }, [householdId]);
 
   useEffect(() => {
-    async function load() {
-      if (!householdId) return;
+    if (!householdId) return;
+    let cancelled = false;
 
-      try {
-        setIsLoading(true);
-        setError(null);
+    setIsLoading(true);
+    setError(null);
+    listHouseholdActivities(Number(householdId), filters)
+      .then((page) => {
+        if (cancelled) return;
+        setMovements(page.data);
+        setNextBefore(page.meta.next_before);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Não foi possível carregar o histórico desta despensa.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
 
-        const filters: ActivityFilters = {};
-        if (userId) filters.userId = Number(userId);
-        if (actionFilter !== 'all') filters.action = actionFilter;
-        if (statusFilter) filters.status = statusFilter;
-        if (search.trim()) filters.search = search.trim();
+    return () => {
+      cancelled = true;
+    };
+  }, [householdId, filters]);
 
-        const data = await listHouseholdActivities(Number(householdId), filters);
-        setActivities(data);
-      } catch {
-        setError('Não foi possível carregar as atividades desta despensa.');
-      } finally {
-        setIsLoading(false);
-      }
+  const handleLoadMore = async () => {
+    if (!householdId || nextBefore === null) return;
+    setIsLoadingMore(true);
+    try {
+      const page = await listHouseholdActivities(Number(householdId), { ...filters, before: nextBefore });
+      setMovements((previous) => [...previous, ...page.data]);
+      setNextBefore(page.meta.next_before);
+    } catch {
+      setError('Não foi possível carregar mais operações.');
+    } finally {
+      setIsLoadingMore(false);
     }
-
-    load();
-  }, [householdId, userId, actionFilter, statusFilter, search]);
+  };
 
   const handleUserChange = (value: string) => {
     setUserId(value);
@@ -92,6 +240,10 @@ export function HouseholdActivities() {
     }
     setSearchParams(next, { replace: true });
   };
+
+  const groups = useMemo(() => groupByDay(movements), [movements]);
+  const selectClass =
+    'h-10 px-3 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]';
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950 transition-colors">
@@ -109,10 +261,10 @@ export function HouseholdActivities() {
 
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            Atividades da despensa
+            Histórico da despensa
           </h1>
           <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Histórico de operações em {currentHousehold?.name ?? 'sua despensa'}
+            Tudo o que foi feito em {currentHousehold?.name ?? 'sua despensa'}, por quem e o que mudou
             {selectedActor
               ? ` — filtrando por ${selectedActor.name}${selectedActor.is_member ? '' : ' (ex-membro)'}`
               : ''}
@@ -126,19 +278,21 @@ export function HouseholdActivities() {
             <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Buscar por produto..."
+              aria-label="Buscar por produto"
               className="w-full h-10 pl-10 pr-4 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
             />
           </div>
 
           <select
+            aria-label="Filtrar por pessoa"
             value={userId}
             onChange={(e) => handleUserChange(e.target.value)}
-            className="h-10 px-3 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
+            className={selectClass}
           >
-            <option value="">Todos os usuários</option>
+            <option value="">Todas as pessoas</option>
             {actors.map((actor) => (
               <option key={actor.id} value={actor.id}>
                 {actor.name}
@@ -148,44 +302,34 @@ export function HouseholdActivities() {
           </select>
 
           <select
+            aria-label="Filtrar por operação"
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value as ActionFilter)}
-            className="h-10 px-3 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
+            className={selectClass}
           >
-            <option value="all">Todas as ações</option>
-            <option value="created">Criados</option>
-            <option value="updated">Atualizados</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-10 px-3 text-sm rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]"
-          >
-            <option value="">Todos os status</option>
-            <option value="active">Ativo</option>
-            <option value="consumed">Consumido</option>
-            <option value="discarded">Descartado</option>
+            {ACTION_FILTERS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Operações ({activities.length})</CardTitle>
-            <CardDescription>
-              Cada linha mostra um lote criado ou alterado nesta despensa.
-            </CardDescription>
+            <CardTitle>Operações</CardTitle>
+            <CardDescription>Da mais recente para a mais antiga.</CardDescription>
           </CardHeader>
 
           <CardContent>
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-[#2d6a4f]" />
-                <p className="text-xs text-stone-500 mt-3">Carregando atividades...</p>
+                <p className="text-xs text-stone-500 mt-3">Carregando histórico...</p>
               </div>
-            ) : error ? (
+            ) : error && movements.length === 0 ? (
               <p className="text-sm text-rose-600 dark:text-rose-400 text-center py-8">{error}</p>
-            ) : activities.length === 0 ? (
+            ) : movements.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Package className="w-8 h-8 text-stone-400 mb-3" />
                 <p className="text-sm text-stone-500 dark:text-stone-400">
@@ -193,58 +337,36 @@ export function HouseholdActivities() {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col divide-y divide-stone-100 dark:divide-stone-800">
-                {activities.map((activity) => (
-                  <div
-                    key={activity.batch_id}
-                    data-testid="activity-row"
-                    className="py-3.5 flex items-start justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3 min-w-0">
-                      <span className="w-8 h-8 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-500 dark:text-stone-400 shrink-0">
-                        {activity.created_by ? (
-                          <PlusCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        ) : (
-                          <Pencil className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                        )}
-                      </span>
-
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
-                          {activity.product_name}
-                        </p>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 flex items-center gap-1.5 mt-0.5">
-                          <Calendar className="w-3 h-3" />
-                          Validade: {formatDate(activity.expires_at)} &bull; Qtd: {activity.quantity}
-                        </p>
-                        <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">
-                          {activity.created_by ? `Criado por ${activity.created_by.name}` : 'Criado'} em{' '}
-                          {formatDate(activity.created_at, 'dd/MM/yyyy HH:mm')}
-                          {activity.updated_by && (
-                            <>
-                              {' '}&bull; Atualizado por {activity.updated_by.name} em{' '}
-                              {formatDate(activity.updated_at, 'dd/MM/yyyy HH:mm')}
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    {activity.status !== 'active' && (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge variant={activity.status} size="sm">
-                          {activity.status === 'consumed' ? 'Consumido' : 'Descartado'}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
+              <div className="flex flex-col gap-5">
+                {groups.map((group) => (
+                  <section key={group.day} aria-label={group.label}>
+                    <h2 className="text-[11px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500 first-letter:uppercase">
+                      {group.label}
+                    </h2>
+                    <ul className="divide-y divide-stone-100 dark:divide-stone-800">
+                      {group.items.map((movement) => (
+                        <MovementItem key={movement.id} movement={movement} />
+                      ))}
+                    </ul>
+                  </section>
                 ))}
+
+                {nextBefore !== null && (
+                  <Button variant="secondary" onClick={handleLoadMore} isLoading={isLoadingMore} className="self-center">
+                    Carregar mais
+                  </Button>
+                )}
+                {error && <p className="text-xs text-rose-600 dark:text-rose-400 text-center">{error}</p>}
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Button variant="secondary" onClick={() => navigate(`/households/${householdId}/settings`)} className="self-start">
+        <Button
+          variant="secondary"
+          onClick={() => navigate(`/households/${householdId}/settings`)}
+          className="self-start"
+        >
           Voltar
         </Button>
       </main>
