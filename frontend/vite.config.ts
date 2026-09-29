@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import {execSync} from 'child_process';
 import path from 'path';
 import {defineConfig} from 'vite';
 
@@ -7,6 +8,25 @@ import {defineConfig} from 'vite';
 // the API on its own origin (/api/*); Vite proxies that prefix to this target so
 // development matches the same-origin setup Caddy provides in production.
 const API_PROXY_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000';
+
+// Version shown in the footer: the release tag ("v0.2.0"), or the tag plus the
+// commits since it ("v0.2.0-3-g7517a80"). APP_VERSION wins when git is not
+// available (e.g. the Node container on the VPS).
+function appVersion(): string {
+  if (process.env.APP_VERSION) {
+    return process.env.APP_VERSION;
+  }
+  try {
+    return execSync('git describe --tags --always', {
+      cwd: __dirname,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 export default defineConfig(() => {
   const disableHmr = process.env.DISABLE_HMR === 'true';
@@ -17,6 +37,9 @@ export default defineConfig(() => {
 
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion()),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

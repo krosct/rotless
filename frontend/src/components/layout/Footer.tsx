@@ -9,9 +9,14 @@ export function Footer() {
           <span className="font-semibold text-stone-700 dark:text-stone-300">rotless</span>
           <span>— Despensa Inteligente Anti-desperdício</span>
         </div>
-        <p className="text-stone-400">
-          Rastreie datas de validade e evite o desperdício com avisos inteligentes.
-        </p>
+        <div className="flex flex-col items-center sm:items-end gap-1">
+          <p className="text-stone-400">
+            Rastreie datas de validade e evite o desperdício com avisos inteligentes.
+          </p>
+          <p className="text-stone-400/80 font-mono text-[11px]" title="Versão do site">
+            {__APP_VERSION__}
+          </p>
+        </div>
       </div>
     </footer>
   );
