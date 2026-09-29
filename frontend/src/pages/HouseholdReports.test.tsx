@@ -32,14 +32,38 @@ vi.mock('@/hooks/useBatches', () => ({
 
 const report: HouseholdReport = {
   period: { days: 30, from: '2026-08-31', to: '2026-09-29', timezone: 'America/Sao_Paulo', bucket: 'day' },
-  totals: { added_units: 20, consumed_units: 12, discarded_units: 4, use_rate: 0.75, operations: 30, avg_days_to_consume: 3.5 },
+  totals: {
+    added_units: 20,
+    consumed_units: 12,
+    discarded_units: 4,
+    use_rate: 0.75,
+    operations: 30,
+    avg_days_to_consume: 3.5,
+    median_days_to_consume: 3,
+  },
   previous: { added_units: 10, consumed_units: 6, discarded_units: 4, use_rate: 0.6 },
   timeline: [
-    { date: '2026-09-28', consumed: 2, discarded: 1 },
-    { date: '2026-09-29', consumed: 1, discarded: 0 },
+    {
+      date: '2026-09-28',
+      consumed: 2,
+      discarded: 1,
+      added: 5,
+      use_rate: 0.6667,
+      consumed_items: [{ product_name: 'Leite', units: 2 }],
+      discarded_items: [{ product_name: 'Alface', units: 1 }],
+    },
+    {
+      date: '2026-09-29',
+      consumed: 1,
+      discarded: 0,
+      added: 0,
+      use_rate: 1,
+      consumed_items: [{ product_name: 'Leite', units: 1 }],
+      discarded_items: [],
+    },
   ],
-  top_consumed: [{ product_name: 'Leite', units: 8 }],
-  top_discarded: [{ product_name: 'Alface', units: 3 }],
+  top_consumed: [{ product_name: 'Leite', units: 8, events: 4, last_at: '2026-09-29' }],
+  top_discarded: [{ product_name: 'Alface', units: 3, events: 2, last_at: '2026-09-28' }],
   members: [
     { user: { id: 1, name: 'Ana' }, is_member: true, added: 5, consumed: 4, discarded: 1, other: 2, total: 12 },
   ],
@@ -74,6 +98,15 @@ describe('HouseholdReports', () => {
     expect(screen.getByText(/3 un vencem nos próximos 3 dias/)).toBeTruthy();
     expect(screen.getByText(/"Alface" foi o mais descartado/)).toBeTruthy();
     expect(screen.getByText('Em risco agora')).toBeTruthy();
+  });
+
+  it('opens a detail window when a chart title is clicked', async () => {
+    renderPage();
+    await screen.findByText('75%');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Próximos vencimentos' }));
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('shows any chart as a table', async () => {

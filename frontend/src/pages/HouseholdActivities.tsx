@@ -45,7 +45,7 @@ const ACTION_FILTERS: { value: ActionFilter; label: string }[] = [
 ];
 
 const ACTION_STYLE: Record<MovementAction, { icon: LucideIcon; className: string }> = {
-  created: { icon: PlusCircle, className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' },
+  created: { icon: PlusCircle, className: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' },
   updated: { icon: Pencil, className: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300' },
   consumed: { icon: CheckCircle2, className: 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300' },
   discarded: { icon: XCircle, className: 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' },
@@ -156,8 +156,8 @@ export function HouseholdActivities() {
 
   const [userId, setUserId] = useState<string>(searchParams.get('user') ?? '');
   const [actionFilter, setActionFilter] = useState<ActionFilter>('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') ?? '');
+  const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [movements, setMovements] = useState<Movement[]>([]);
   const [nextBefore, setNextBefore] = useState<number | null>(null);
   const [actors, setActors] = useState<HouseholdActor[]>([]);

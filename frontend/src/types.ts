@@ -86,13 +86,37 @@ export interface ReportTotals {
   use_rate: number | null;
 }
 
+export interface ReportItem {
+  product_name: string;
+  units: number;
+}
+
+export interface ReportProduct extends ReportItem {
+  events: number;
+  last_at: string | null;
+}
+
+export interface ReportTimelinePoint {
+  date: string;
+  consumed: number;
+  discarded: number;
+  added: number;
+  use_rate: number | null;
+  consumed_items: ReportItem[];
+  discarded_items: ReportItem[];
+}
+
 export interface HouseholdReport {
   period: { days: 7 | 30 | 90; from: string; to: string; timezone: string; bucket: 'day' | 'week' };
-  totals: ReportTotals & { operations: number; avg_days_to_consume: number | null };
+  totals: ReportTotals & {
+    operations: number;
+    avg_days_to_consume: number | null;
+    median_days_to_consume: number | null;
+  };
   previous: ReportTotals;
-  timeline: { date: string; consumed: number; discarded: number }[];
-  top_consumed: { product_name: string; units: number }[];
-  top_discarded: { product_name: string; units: number }[];
+  timeline: ReportTimelinePoint[];
+  top_consumed: ReportProduct[];
+  top_discarded: ReportProduct[];
   members: {
     user: BatchActor;
     is_member: boolean;
