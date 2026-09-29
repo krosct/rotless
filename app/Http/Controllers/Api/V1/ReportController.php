@@ -27,7 +27,14 @@ final class ReportController extends Controller
 {
     use AuthorizesRequests;
 
-    private const TOP = 5;
+    /**
+     * Ranking size. The page shows the first five; the detail modal can show
+     * more without a second request.
+     */
+    private const TOP = 20;
+
+    /** How many products to name under each timeline bucket. */
+    private const ITEMS = 3;
 
     public function show(Request $request, Household $household): JsonResponse
     {
@@ -61,6 +68,8 @@ final class ReportController extends Controller
 
         $bucket = $days === 90 ? 'week' : 'day';
 
+        $spans = $this->consumptionSpans($current);
+
         return response()->json([
             'data' => [
                 'period' => [
@@ -72,7 +81,8 @@ final class ReportController extends Controller
                 ],
                 'totals' => $this->totals($current) + [
                     'operations' => $current->count(),
-                    'avg_days_to_consume' => $this->averageDaysToConsume($current),
+                    'avg_days_to_consume' => $spans->isEmpty() ? null : round((float) $spans->avg(), 1),
+                    'median_days_to_consume' => $this->median($spans),
                 ],
                 'previous' => $this->totals($previous),
                 'timeline' => $this->timeline($current, $start, $today, $bucket),
@@ -105,31 +115,69 @@ final class ReportController extends Controller
         ];
     }
 
-    /** @param  Collection<int, HouseholdMovement>  $movements */
-    private function averageDaysToConsume(Collection $movements): ?float
+    /**
+     * Days between each consumed batch's creation and its consumption, one
+     * span per consumed movement.
+     *
+     * @param  Collection<int, HouseholdMovement>  $movements
+     * @return Collection<int, float>
+     */
+    private function consumptionSpans(Collection $movements): Collection
     {
         $consumed = $movements->filter(fn (HouseholdMovement $movement): bool => $movement->action === MovementAction::Consumed
             && $movement->batch_id !== null);
 
         if ($consumed->isEmpty()) {
-            return null;
+            return collect();
         }
 
         $createdAt = Batch::query()
             ->whereIn('id', $consumed->pluck('batch_id')->unique()->all())
             ->pluck('created_at', 'id');
 
-        $spans = $consumed
+        return $consumed
             ->filter(fn (HouseholdMovement $movement): bool => isset($createdAt[$movement->batch_id]))
             ->map(fn (HouseholdMovement $movement): float => max(0, CarbonImmutable::parse($createdAt[$movement->batch_id])
-                ->diffInHours(CarbonImmutable::parse($movement->created_at))) / 24);
-
-        return $spans->isEmpty() ? null : round((float) $spans->avg(), 1);
+                ->diffInHours(CarbonImmutable::parse($movement->created_at))) / 24)
+            ->values();
     }
 
     /**
+     * Median of a numeric collection, rounded to one decimal. The collection
+     * is sorted in place; pass a throwaway copy if the order matters.
+     *
+     * @param  Collection<int, float>  $values
+     */
+    private function median(Collection $values): ?float
+    {
+        if ($values->isEmpty()) {
+            return null;
+        }
+
+        $sorted = $values->sort()->values();
+        $middle = intdiv($sorted->count(), 2);
+
+        $median = $sorted->count() % 2 === 1
+            ? (float) $sorted->get($middle)
+            : ((float) $sorted->get($middle - 1) + (float) $sorted->get($middle)) / 2;
+
+        return round($median, 1);
+    }
+
+    /**
+     * One point per bucket, zero-filled, with the units in and out plus the
+     * products behind the consumed/discarded units.
+     *
      * @param  Collection<int, HouseholdMovement>  $movements
-     * @return list<array{date: string, consumed: int, discarded: int}>
+     * @return list<array{
+     *     date: string,
+     *     consumed: int,
+     *     discarded: int,
+     *     added: int,
+     *     use_rate: float|null,
+     *     consumed_items: list<array{product_name: string, units: int}>,
+     *     discarded_items: list<array{product_name: string, units: int}>
+     * }>
      */
     private function timeline(Collection $movements, CarbonImmutable $start, CarbonImmutable $today, string $bucket): array
     {
@@ -137,38 +185,90 @@ final class ReportController extends Controller
             ? $at->startOfWeek()->toDateString()
             : $at->toDateString();
 
+        $bucketed = $movements->groupBy(
+            fn (HouseholdMovement $movement): string => $keyOf($movement->getAttribute('local_at')),
+        );
+
         $points = [];
         $cursor = $bucket === 'week' ? $start->startOfWeek() : $start;
         while ($cursor <= $today) {
-            $points[$cursor->toDateString()] = ['date' => $cursor->toDateString(), 'consumed' => 0, 'discarded' => 0];
+            $key = $cursor->toDateString();
+            /** @var Collection<int, HouseholdMovement> $in */
+            $in = $bucketed->get($key, collect());
+
+            $consumed = $this->units($in, MovementAction::Consumed);
+            $discarded = $this->units($in, MovementAction::Discarded);
+
+            $points[] = [
+                'date' => $key,
+                'consumed' => $consumed,
+                'discarded' => $discarded,
+                'added' => $this->units($in, MovementAction::Created),
+                'use_rate' => $consumed + $discarded === 0 ? null : round($consumed / ($consumed + $discarded), 4),
+                'consumed_items' => $this->productItems($in, MovementAction::Consumed, self::ITEMS),
+                'discarded_items' => $this->productItems($in, MovementAction::Discarded, self::ITEMS),
+            ];
+
             $cursor = $bucket === 'week' ? $cursor->addWeek() : $cursor->addDay();
         }
 
-        foreach ($movements as $movement) {
-            $field = match ($movement->action) {
-                MovementAction::Consumed => 'consumed',
-                MovementAction::Discarded => 'discarded',
-                default => null,
-            };
-            $key = $keyOf($movement->getAttribute('local_at'));
-            if ($field !== null && isset($points[$key])) {
-                $points[$key][$field] += (int) $movement->quantity;
-            }
-        }
+        return $points;
+    }
 
-        return array_values($points);
+    /** @param  Collection<int, HouseholdMovement>  $movements */
+    private function units(Collection $movements, MovementAction $action): int
+    {
+        return (int) $movements
+            ->filter(fn (HouseholdMovement $movement): bool => $movement->action === $action)
+            ->sum('quantity');
+    }
+
+    /**
+     * Movements of one action grouped by the product name snapshot.
+     *
+     * @param  Collection<int, HouseholdMovement>  $movements
+     * @return Collection<string, Collection<int, HouseholdMovement>>
+     */
+    private function byProduct(Collection $movements, MovementAction $action): Collection
+    {
+        return $movements
+            ->filter(fn (HouseholdMovement $movement): bool => $movement->action === $action && $movement->product_name !== null)
+            ->groupBy('product_name');
+    }
+
+    /**
+     * Top products of an action by units, without the ranking metadata.
+     *
+     * @param  Collection<int, HouseholdMovement>  $movements
+     * @return list<array{product_name: string, units: int}>
+     */
+    private function productItems(Collection $movements, MovementAction $action, int $limit): array
+    {
+        return $this->byProduct($movements, $action)
+            ->map(fn (Collection $group, string $name): array => ['product_name' => $name, 'units' => (int) $group->sum('quantity')])
+            ->sortByDesc('units')
+            ->take($limit)
+            ->values()
+            ->all();
     }
 
     /**
      * @param  Collection<int, HouseholdMovement>  $movements
-     * @return list<array{product_name: string, units: int}>
+     * @return list<array{product_name: string, units: int, events: int, last_at: string|null}>
      */
     private function topProducts(Collection $movements, MovementAction $action): array
     {
-        return $movements
-            ->filter(fn (HouseholdMovement $movement): bool => $movement->action === $action && $movement->product_name !== null)
-            ->groupBy('product_name')
-            ->map(fn (Collection $group, string $name): array => ['product_name' => $name, 'units' => (int) $group->sum('quantity')])
+        return $this->byProduct($movements, $action)
+            ->map(function (Collection $group, string $name): array {
+                $last = $group->max(fn (HouseholdMovement $movement) => $movement->getAttribute('local_at'));
+
+                return [
+                    'product_name' => $name,
+                    'units' => (int) $group->sum('quantity'),
+                    'events' => $group->count(),
+                    'last_at' => $last instanceof CarbonImmutable ? $last->toDateString() : null,
+                ];
+            })
             ->sortByDesc('units')
             ->take(self::TOP)
             ->values()

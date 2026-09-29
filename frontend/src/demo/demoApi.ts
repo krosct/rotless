@@ -258,7 +258,7 @@ function totalsOf(movements: DemoMovement[]) {
   };
 }
 
-function topProducts(movements: DemoMovement[], action: MovementAction) {
+function productItems(movements: DemoMovement[], action: MovementAction, limit: number) {
   const byName = new Map<string, number>();
   for (const movement of movements) {
     if (movement.action !== action || !movement.product_name) continue;
@@ -267,7 +267,36 @@ function topProducts(movements: DemoMovement[], action: MovementAction) {
   return [...byName.entries()]
     .map(([product_name, units]) => ({ product_name, units }))
     .sort((a, b) => b.units - a.units)
-    .slice(0, 5);
+    .slice(0, limit);
+}
+
+function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  return Math.round(median * 10) / 10;
+}
+
+function topProducts(movements: DemoMovement[], action: MovementAction) {
+  const byName = new Map<string, { units: number; events: number; last: string }>();
+  for (const movement of movements) {
+    if (movement.action !== action || !movement.product_name) continue;
+    const entry = byName.get(movement.product_name) ?? { units: 0, events: 0, last: movement.created_at };
+    entry.units += movement.quantity ?? 0;
+    entry.events += 1;
+    if (movement.created_at > entry.last) entry.last = movement.created_at;
+    byName.set(movement.product_name, entry);
+  }
+  return [...byName.entries()]
+    .map(([product_name, entry]) => ({
+      product_name,
+      units: entry.units,
+      events: entry.events,
+      last_at: format(parseISO(entry.last), 'yyyy-MM-dd'),
+    }))
+    .sort((a, b) => b.units - a.units)
+    .slice(0, 20);
 }
 
 export function buildReport(db: DemoDb, days: 7 | 30 | 90, now: Date = new Date()): HouseholdReport {
@@ -281,19 +310,43 @@ export function buildReport(db: DemoDb, days: 7 | 30 | 90, now: Date = new Date(
   const previous = inWindow.filter((movement) => new Date(movement.created_at) < start);
 
   const keyOf = (date: Date) => format(bucket === 'week' ? startOfWeek(date, { weekStartsOn: 1 }) : date, 'yyyy-MM-dd');
-  const points = new Map<string, { date: string; consumed: number; discarded: number }>();
+  const byBucket = new Map<string, DemoMovement[]>();
+  for (const movement of current) {
+    const key = keyOf(new Date(movement.created_at));
+    byBucket.set(key, [...(byBucket.get(key) ?? []), movement]);
+  }
+  const points = new Map<
+    string,
+    {
+      date: string;
+      consumed: number;
+      discarded: number;
+      added: number;
+      use_rate: number | null;
+      consumed_items: { product_name: string; units: number }[];
+      discarded_items: { product_name: string; units: number }[];
+    }
+  >();
   for (
     let cursor = bucket === 'week' ? startOfWeek(start, { weekStartsOn: 1 }) : start;
     cursor <= today;
     cursor = addDays(cursor, bucket === 'week' ? 7 : 1)
   ) {
     const key = format(cursor, 'yyyy-MM-dd');
-    points.set(key, { date: key, consumed: 0, discarded: 0 });
-  }
-  for (const movement of current) {
-    if (movement.action !== 'consumed' && movement.action !== 'discarded') continue;
-    const point = points.get(keyOf(new Date(movement.created_at)));
-    if (point) point[movement.action] += movement.quantity ?? 0;
+    const inBucket = byBucket.get(key) ?? [];
+    const units = (action: MovementAction) =>
+      inBucket.filter((movement) => movement.action === action).reduce((sum, movement) => sum + (movement.quantity ?? 0), 0);
+    const consumed = units('consumed');
+    const discarded = units('discarded');
+    points.set(key, {
+      date: key,
+      consumed,
+      discarded,
+      added: units('created'),
+      use_rate: consumed + discarded === 0 ? null : Math.round((consumed / (consumed + discarded)) * 10000) / 10000,
+      consumed_items: productItems(inBucket, 'consumed', 3),
+      discarded_items: productItems(inBucket, 'discarded', 3),
+    });
   }
 
   const createdAt = new Map(db.batches.map((batch) => [batch.id, batch.created_at]));
@@ -329,6 +382,7 @@ export function buildReport(db: DemoDb, days: 7 | 30 | 90, now: Date = new Date(
       ...totalsOf(current),
       operations: current.length,
       avg_days_to_consume: spans.length === 0 ? null : Math.round((spans.reduce((a, b) => a + b, 0) / spans.length) * 10) / 10,
+      median_days_to_consume: medianOf(spans),
     },
     previous: totalsOf(previous),
     timeline: [...points.values()],

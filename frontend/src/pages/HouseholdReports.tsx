@@ -9,10 +9,20 @@ import { getHouseholdReport } from '@/api/households';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Card } from '@/components/ui/Card';
-import { BarList, ChartCard, ColumnChart, Legend, Series, StatTile } from '@/components/reports/charts';
+import {
+  BarList,
+  ChartCard,
+  ColumnChart,
+  CompositionBar,
+  DataTable,
+  HoverTooltip,
+  Legend,
+  Series,
+  StatTile,
+} from '@/components/reports/charts';
 import { expiryTone } from '@/utils/expiry';
 import { cn } from '@/utils/cn';
-import { Batch, HouseholdReport } from '@/types';
+import { Batch, ExpiryTone, HouseholdReport, ReportProduct } from '@/types';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -40,6 +50,12 @@ const SOON: Series = { key: 'soon', name: 'Vence em até 3 dias', color: 'var(--
 const LATER: Series = { key: 'later', name: 'Vence depois', color: 'var(--viz-muted)' };
 
 const UPCOMING_DAYS = 14;
+const TOP_PRODUCTS = 5;
+
+interface PantryItem {
+  name: string;
+  quantity: number;
+}
 
 function percent(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
@@ -49,14 +65,24 @@ function formatDay(iso: string, pattern: string): string {
   return format(parseISO(iso), pattern, { locale: ptBR });
 }
 
-/** What is in the pantry right now, by expiry status (units). */
+/** What is in the pantry right now, by expiry status (units, batches, items). */
 function pantryNow(batches: Batch[], now: Date) {
-  const result = { overdue: 0, soon: 0, ok: 0, batches: { overdue: 0, soon: 0, ok: 0 } };
+  const result = {
+    overdue: 0,
+    soon: 0,
+    ok: 0,
+    batches: { overdue: 0, soon: 0, ok: 0 },
+    items: { overdue: [] as PantryItem[], soon: [] as PantryItem[], ok: [] as PantryItem[] },
+  };
   for (const batch of batches) {
     if (batch.status !== 'active') continue;
     const tone = expiryTone(batch.expires_at, now);
     result[tone] += batch.quantity;
     result.batches[tone] += 1;
+    result.items[tone].push({ name: batch.product.name, quantity: batch.quantity });
+  }
+  for (const tone of ['overdue', 'soon', 'ok'] as ExpiryTone[]) {
+    result.items[tone].sort((a, b) => b.quantity - a.quantity);
   }
   return result;
 }
@@ -64,11 +90,28 @@ function pantryNow(batches: Batch[], now: Date) {
 function upcoming(batches: Batch[], now: Date) {
   return Array.from({ length: UPCOMING_DAYS }, (_, offset) => {
     const date = format(addDays(now, offset), 'yyyy-MM-dd');
-    const units = batches
+    const items = batches
       .filter((batch) => batch.status === 'active' && batch.expires_at === date)
-      .reduce((sum, batch) => sum + batch.quantity, 0);
-    return { date, offset, units };
+      .map((batch) => ({ name: batch.product.name, quantity: batch.quantity }))
+      .sort((a, b) => b.quantity - a.quantity);
+    const units = items.reduce((sum, item) => sum + item.quantity, 0);
+    return { date, offset, units, items };
   });
+}
+
+/** Names of the most urgent products still in the pantry (overdue first). */
+function urgentNames(now: ReturnType<typeof pantryNow>, limit = 3): string[] {
+  const urgency: ExpiryTone[] = ['overdue', 'soon'];
+  return urgency
+    .flatMap((tone) => now.items[tone])
+    .slice(0, limit)
+    .map((item) => item.name);
+}
+
+function itemLabel(items: PantryItem[], limit: number): string {
+  const shown = items.slice(0, limit).map((item) => `${item.name} (${item.quantity})`);
+  const rest = items.length - shown.length;
+  return rest > 0 ? `${shown.join(', ')} +${rest}` : shown.join(', ');
 }
 
 function insights(report: HouseholdReport | undefined, now: ReturnType<typeof pantryNow>): string[] {
@@ -90,6 +133,25 @@ function insights(report: HouseholdReport | undefined, now: ReturnType<typeof pa
       rate > previous
         ? `O aproveitamento subiu de ${percent(previous)} para ${percent(rate)} em relação ao período anterior.`
         : `O aproveitamento caiu de ${percent(previous)} para ${percent(rate)} em relação ao período anterior.`
+    );
+  }
+  const favorite = report?.top_consumed[0];
+  if (favorite) {
+    tips.push(
+      `"${favorite.product_name}" foi o mais consumido no período (${favorite.units} un): mantenha um estoque de segurança dele.`
+    );
+  }
+  const urgentItem = now.items.overdue[0] ?? now.items.soon[0];
+  if (urgentItem) {
+    const timing = now.items.overdue[0] ? 'já venceu' : 'vence em até 3 dias';
+    tips.push(`Priorize "${urgentItem.name}" (${urgentItem.quantity} un), que ${timing}.`);
+  }
+  const avgDays = report?.totals.avg_days_to_consume ?? null;
+  if (report && report.totals.consumed_units > 0 && report.totals.discarded_units === 0) {
+    tips.push('Nenhum descarte no período: todo o consumo foi aproveitado, continue assim.');
+  } else if (avgDays !== null) {
+    tips.push(
+      `O tempo médio entre a compra e o consumo é de ${avgDays.toLocaleString('pt-BR')} dias; itens que passam muito disso tendem a virar descarte.`
     );
   }
   return tips;
@@ -153,11 +215,17 @@ function UseRateHero({ report }: { report: HouseholdReport }) {
   );
 }
 
-function PantryStatus({ now }: { now: ReturnType<typeof pantryNow> }) {
+function PantryStatus({
+  now,
+  onItemClick,
+}: {
+  now: ReturnType<typeof pantryNow>;
+  onItemClick: (tone: ExpiryTone) => void;
+}) {
   const items = [
-    { key: 'overdue', label: 'Vencidos', units: now.overdue, batches: now.batches.overdue, color: 'var(--viz-critical)', icon: XCircle },
-    { key: 'soon', label: 'Vencem em até 3 dias', units: now.soon, batches: now.batches.soon, color: 'var(--viz-warning)', icon: AlertTriangle },
-    { key: 'ok', label: 'No prazo', units: now.ok, batches: now.batches.ok, color: 'var(--viz-good)', icon: CheckCircle2 },
+    { key: 'overdue' as const, label: 'Vencidos', units: now.overdue, batches: now.batches.overdue, color: 'var(--viz-critical)', icon: XCircle },
+    { key: 'soon' as const, label: 'Vencem em até 3 dias', units: now.soon, batches: now.batches.soon, color: 'var(--viz-warning)', icon: AlertTriangle },
+    { key: 'ok' as const, label: 'No prazo', units: now.ok, batches: now.batches.ok, color: 'var(--viz-good)', icon: CheckCircle2 },
   ];
   const total = items.reduce((sum, item) => sum + item.units, 0);
 
@@ -167,25 +235,146 @@ function PantryStatus({ now }: { now: ReturnType<typeof pantryNow> }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex h-4 w-full gap-[2px] overflow-hidden rounded-[4px]" role="img" aria-label="Situação da despensa por validade">
-        {items.filter((item) => item.units > 0).map((item) => (
-          <span key={item.key} style={{ flexGrow: item.units, background: item.color }} />
-        ))}
-      </div>
-      <ul className="flex flex-col gap-2">
+      <CompositionBar
+        ariaLabel="Situação da despensa por validade"
+        segments={items.map((item) => ({ key: item.key, value: item.units, color: item.color }))}
+      />
+      <ul className="flex flex-col gap-1">
         {items.map((item) => (
-          <li key={item.key} className="flex items-center justify-between gap-3 text-xs">
-            <span className="inline-flex items-center gap-1.5 text-stone-700 dark:text-stone-300">
-              <item.icon className="w-3.5 h-3.5" style={{ color: item.color }} aria-hidden="true" />
-              {item.label}
-            </span>
-            <span className="tabular-nums text-stone-500 dark:text-stone-400">
-              <strong className="text-stone-900 dark:text-white">{item.units} un</strong> · {item.batches} lote(s) ·{' '}
-              {Math.round((item.units / total) * 100)}%
-            </span>
+          <li key={item.key}>
+            <HoverTooltip
+              className="w-full"
+              title={item.label}
+              rows={[
+                { name: 'un', value: String(item.units) },
+                { name: 'lote(s)', value: String(item.batches) },
+              ]}
+              groups={[
+                { items: now.items[item.key].map((entry) => ({ label: entry.name, value: `${entry.quantity} un` })) },
+              ]}
+            >
+              <button
+                type="button"
+                disabled={item.units === 0}
+                onClick={() => onItemClick(item.key)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-stone-100 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-stone-800/60 dark:disabled:hover:bg-transparent"
+              >
+                <span className="inline-flex items-center gap-1.5 text-stone-700 dark:text-stone-300">
+                  <item.icon className="w-3.5 h-3.5" style={{ color: item.color }} aria-hidden="true" />
+                  {item.label}
+                </span>
+                <span className="tabular-nums text-stone-500 dark:text-stone-400">
+                  <strong className="text-stone-900 dark:text-white">{item.units} un</strong> · {item.batches} lote(s) ·{' '}
+                  {Math.round((item.units / total) * 100)}%
+                </span>
+              </button>
+            </HoverTooltip>
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+const STATUS_META: { key: ExpiryTone; label: string; color: string }[] = [
+  { key: 'overdue', label: 'Vencidos', color: 'var(--viz-critical)' },
+  { key: 'soon', label: 'Vencem em até 3 dias', color: 'var(--viz-warning)' },
+  { key: 'ok', label: 'No prazo', color: 'var(--viz-good)' },
+];
+
+/** Full, item-by-item pantry status, shown in the detail window. */
+function PantryStatusDetails({ now }: { now: ReturnType<typeof pantryNow> }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {STATUS_META.map((status) => (
+        <section key={status.key}>
+          <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-stone-800 dark:text-stone-200">
+            <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: status.color }} aria-hidden="true" />
+            {status.label}
+            <span className="text-xs font-normal text-stone-500 dark:text-stone-400">
+              · {now[status.key]} un · {now.batches[status.key]} lote(s)
+            </span>
+          </h4>
+          {now.items[status.key].length === 0 ? (
+            <p className="mt-1 pl-4 text-xs text-stone-500 dark:text-stone-400">Nenhum item.</p>
+          ) : (
+            <ul className="mt-1 flex flex-col gap-1 pl-4">
+              {now.items[status.key].map((item, index) => (
+                <li key={`${item.name}-${index}`} className="flex items-center justify-between gap-3 text-xs">
+                  <span className="truncate text-stone-600 dark:text-stone-300">{item.name}</span>
+                  <span className="tabular-nums text-stone-500 dark:text-stone-400">{item.quantity} un</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** Full, item-by-item consumption and discard, grouped per bucket, for the detail window. */
+function TimelineDetails({ report }: { report: HouseholdReport }) {
+  type Point = HouseholdReport['timeline'][number];
+  const buckets = report.timeline.filter(
+    (point) => point.consumed_items.length > 0 || point.discarded_items.length > 0
+  );
+
+  if (buckets.length === 0) {
+    return (
+      <p className="py-6 text-center text-xs text-stone-500 dark:text-stone-400">
+        Sem consumo ou descarte no período.
+      </p>
+    );
+  }
+
+  const groups: {
+    key: string;
+    label: string;
+    color: string;
+    units: (point: Point) => number;
+    items: (point: Point) => { product_name: string; units: number }[];
+  }[] = [
+    { key: 'consumed', label: 'Consumido', color: CONSUMED.color, units: (point) => point.consumed, items: (point) => point.consumed_items },
+    { key: 'discarded', label: 'Descartado', color: DISCARDED.color, units: (point) => point.discarded, items: (point) => point.discarded_items },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5">
+      {buckets.map((point) => (
+        <section key={point.date}>
+          <h4 className="text-sm font-semibold text-stone-800 dark:text-stone-200">
+            {report.period.bucket === 'week'
+              ? `Semana de ${formatDay(point.date, 'dd/MM/yyyy')}`
+              : formatDay(point.date, "EEEE, dd/MM/yyyy")}
+          </h4>
+          <div className="mt-2 flex flex-col gap-3">
+            {groups.map((group) => {
+              const items = group.items(point);
+              if (items.length === 0) return null;
+              return (
+                <div key={group.key} className="pl-4">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400">
+                    <span className="h-2 w-2 rounded-full" style={{ background: group.color }} aria-hidden="true" />
+                    {group.label} · {group.units(point)} un
+                  </p>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {items.map((item, index) => (
+                      <li
+                        key={`${item.product_name}-${index}`}
+                        className="flex items-center justify-between gap-3 text-xs"
+                      >
+                        <span className="truncate text-stone-600 dark:text-stone-300">{item.product_name}</span>
+                        <span className="tabular-nums text-stone-500 dark:text-stone-400">{item.units} un</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -213,6 +402,11 @@ export function HouseholdReports() {
   const next = useMemo(() => upcoming(batches, today), [batches, today]);
   const report = reportQuery.data;
   const tips = insights(report, now);
+  const urgent = urgentNames(now);
+
+  const goToHistory = (search: string) => {
+    navigate(`/households/${householdId}/activities?search=${encodeURIComponent(search)}`);
+  };
 
   const timelineColumns = (report?.timeline ?? []).map((point, index, all) => {
     const everyNth = report?.period.bucket === 'week' ? 2 : all.length > 10 ? 5 : 1;
@@ -228,6 +422,18 @@ export function HouseholdReports() {
         { series: CONSUMED, value: point.consumed },
         { series: DISCARDED, value: point.discarded },
       ],
+      groups: [
+        {
+          label: 'Consumido',
+          color: CONSUMED.color,
+          items: point.consumed_items.map((item) => ({ label: item.product_name, value: `${item.units} un` })),
+        },
+        {
+          label: 'Descartado',
+          color: DISCARDED.color,
+          items: point.discarded_items.map((item) => ({ label: item.product_name, value: `${item.units} un` })),
+        },
+      ],
     };
   });
 
@@ -236,7 +442,67 @@ export function HouseholdReports() {
     label: day.offset === 0 ? 'Hoje' : day.offset % 3 === 0 ? formatDay(day.date, 'dd/MM') : '',
     tooltipTitle: day.offset === 0 ? 'Hoje' : formatDay(day.date, "EEEE, dd/MM"),
     segments: [{ series: day.offset <= 3 ? SOON : LATER, value: day.units }],
+    groups: [{ items: day.items.map((item) => ({ label: item.name, value: `${item.quantity} un` })) }],
   }));
+
+  const timelineTable = {
+    columns: [
+      report?.period.bucket === 'week' ? 'Semana de' : 'Dia',
+      'Consumido',
+      'Descartado',
+      'Adicionado',
+      'Itens',
+    ],
+    rows: (report?.timeline ?? []).map((point) => [
+      formatDay(point.date, 'dd/MM/yyyy'),
+      point.consumed,
+      point.discarded,
+      point.added,
+      [...point.consumed_items, ...point.discarded_items]
+        .map((item) => `${item.product_name} (${item.units})`)
+        .join(', ') || '—',
+    ]),
+  };
+
+  const productRow = (series: Series, item: ReportProduct) => ({
+    key: item.product_name,
+    label: item.product_name,
+    segments: [{ series, value: item.units }],
+  });
+
+  const productTable = (items: ReportProduct[], header: string) => ({
+    columns: ['Produto', 'Unidades', header, 'Último'],
+    rows: items.map((item) => [
+      item.product_name,
+      item.units,
+      item.events,
+      item.last_at ? formatDay(item.last_at, 'dd/MM/yyyy') : '—',
+    ]),
+  });
+
+  const memberRows = (members: HouseholdReport['members']) =>
+    members.map((member) => ({
+      key: String(member.user.id),
+      label: `${member.user.name}${member.is_member ? '' : ' (ex-membro)'}`,
+      segments: [
+        { series: ADDED, value: member.added },
+        { series: CONSUMED_OPS, value: member.consumed },
+        { series: DISCARDED_OPS, value: member.discarded },
+      ],
+      valueLabel: `${member.total} op.`,
+    }));
+
+  const memberTable = (members: HouseholdReport['members']) => ({
+    columns: ['Pessoa', 'Adicionou', 'Consumiu', 'Descartou', 'Outras', 'Total'],
+    rows: members.map((member) => [
+      `${member.user.name}${member.is_member ? '' : ' (ex-membro)'}`,
+      member.added,
+      member.consumed,
+      member.discarded,
+      member.other,
+      member.total,
+    ]),
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950 transition-colors">
@@ -306,7 +572,11 @@ export function HouseholdReports() {
                 label="Em risco agora"
                 icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-500" aria-hidden="true" />}
                 value={`${now.overdue + now.soon} un`}
-                hint={`${now.overdue} vencida(s) · ${now.soon} vencem em até 3 dias`}
+                hint={
+                  urgent.length > 0
+                    ? `${now.overdue} vencida(s) · ${now.soon} em até 3 dias — ${urgent.join(', ')}`
+                    : `${now.overdue} vencida(s) · ${now.soon} vencem em até 3 dias`
+                }
                 tone={now.overdue + now.soon > 0 ? 'warning' : 'neutral'}
               />
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
@@ -324,7 +594,11 @@ export function HouseholdReports() {
                       ? '—'
                       : `${report.totals.avg_days_to_consume.toLocaleString('pt-BR')} dias`
                   }
-                  hint="média entre a compra e o consumo"
+                  hint={
+                    report.totals.median_days_to_consume === null
+                      ? 'média entre a compra e o consumo'
+                      : `média · mediana ${report.totals.median_days_to_consume.toLocaleString('pt-BR')} dias`
+                  }
                 />
               </div>
             </div>
@@ -351,18 +625,29 @@ export function HouseholdReports() {
                   : 'Unidades consumidas e descartadas por dia.'
               }
               legend={[CONSUMED, DISCARDED]}
-              table={{
-                columns: [report.period.bucket === 'week' ? 'Semana de' : 'Dia', 'Consumido', 'Descartado'],
-                rows: report.timeline.map((point) => [formatDay(point.date, 'dd/MM/yyyy'), point.consumed, point.discarded]),
-              }}
+              table={timelineTable}
+              detail={
+                <div className="flex flex-col gap-5">
+                  <ColumnChart columns={timelineColumns} height={288} />
+                  <TimelineDetails report={report} />
+                </div>
+              }
             >
-              <ColumnChart columns={timelineColumns} />
+              <ColumnChart
+                columns={timelineColumns}
+                onSelect={(index) => {
+                  if (index === null) return;
+                  const point = report.timeline[index];
+                  const first = point?.consumed_items[0] ?? point?.discarded_items[0];
+                  if (first) goToHistory(first.product_name);
+                }}
+              />
             </ChartCard>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartCard
                 title="Situação da despensa agora"
-                description="Unidades ativas por prazo de validade."
+                description="Unidades ativas por prazo de validade. Clique em uma linha para ver no histórico."
                 table={{
                   columns: ['Situação', 'Unidades', 'Lotes'],
                   rows: [
@@ -371,57 +656,111 @@ export function HouseholdReports() {
                     ['No prazo', now.ok, now.batches.ok],
                   ],
                 }}
+                detail={
+                  <div className="flex flex-col gap-5">
+                    <CompositionBar
+                      ariaLabel="Situação da despensa por validade"
+                      segments={STATUS_META.map((status) => ({
+                        key: status.key,
+                        value: now[status.key],
+                        color: status.color,
+                      }))}
+                    />
+                    <PantryStatusDetails now={now} />
+                  </div>
+                }
               >
-                <PantryStatus now={now} />
+                <PantryStatus
+                  now={now}
+                  onItemClick={(tone) => {
+                    const first = now.items[tone][0];
+                    if (first) goToHistory(first.name);
+                  }}
+                />
               </ChartCard>
 
               <ChartCard
                 title="Próximos vencimentos"
-                description={`Unidades que vencem em cada um dos próximos ${UPCOMING_DAYS} dias.`}
+                description={`Unidades que vencem em cada um dos próximos ${UPCOMING_DAYS} dias. Clique em uma barra para ver no histórico.`}
                 legend={[SOON, LATER]}
                 table={{
-                  columns: ['Dia', 'Unidades'],
-                  rows: next.map((day) => [formatDay(day.date, 'dd/MM/yyyy'), day.units]),
+                  columns: ['Dia', 'Unidades', 'Itens'],
+                  rows: next.map((day) => [
+                    formatDay(day.date, 'dd/MM/yyyy'),
+                    day.units,
+                    itemLabel(day.items, 50) || '—',
+                  ]),
                 }}
+                detail={
+                  <div className="flex flex-col gap-4">
+                    <ColumnChart columns={upcomingColumns} height={288} />
+                    <DataTable
+                      table={{
+                        columns: ['Dia', 'Unidades', 'Itens'],
+                        rows: next.map((day) => [
+                          formatDay(day.date, 'dd/MM/yyyy'),
+                          day.units,
+                          itemLabel(day.items, 50) || '—',
+                        ]),
+                      }}
+                    />
+                  </div>
+                }
               >
-                <ColumnChart columns={upcomingColumns} height={148} />
+                <ColumnChart
+                  columns={upcomingColumns}
+                  height={148}
+                  onSelect={(index) => {
+                    if (index === null) return;
+                    const first = next[index]?.items[0];
+                    if (first) goToHistory(first.name);
+                  }}
+                />
               </ChartCard>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartCard
                 title="Mais desperdiçados"
-                description="Produtos com mais unidades descartadas no período."
-                table={{
-                  columns: ['Produto', 'Unidades descartadas'],
-                  rows: report.top_discarded.map((item) => [item.product_name, item.units]),
-                }}
+                description="Produtos com mais unidades descartadas no período. Clique para ver no histórico."
+                table={productTable(report.top_discarded.slice(0, TOP_PRODUCTS), 'Descarte(s)')}
+                detail={
+                  <div className="flex flex-col gap-4">
+                    <BarList
+                      empty="Nenhum descarte no período. Ótimo!"
+                      onSelect={goToHistory}
+                      rows={report.top_discarded.map((item) => productRow(DISCARDED, item))}
+                    />
+                    <DataTable table={productTable(report.top_discarded, 'Descarte(s)')} />
+                  </div>
+                }
               >
                 <BarList
                   empty="Nenhum descarte no período. Ótimo!"
-                  rows={report.top_discarded.map((item) => ({
-                    key: item.product_name,
-                    label: item.product_name,
-                    segments: [{ series: DISCARDED, value: item.units }],
-                  }))}
+                  onSelect={goToHistory}
+                  rows={report.top_discarded.slice(0, TOP_PRODUCTS).map((item) => productRow(DISCARDED, item))}
                 />
               </ChartCard>
 
               <ChartCard
                 title="Mais consumidos"
-                description="Produtos com mais unidades consumidas no período."
-                table={{
-                  columns: ['Produto', 'Unidades consumidas'],
-                  rows: report.top_consumed.map((item) => [item.product_name, item.units]),
-                }}
+                description="Produtos com mais unidades consumidas no período. Clique para ver no histórico."
+                table={productTable(report.top_consumed.slice(0, TOP_PRODUCTS), 'Saída(s)')}
+                detail={
+                  <div className="flex flex-col gap-4">
+                    <BarList
+                      empty="Nenhum consumo no período."
+                      onSelect={goToHistory}
+                      rows={report.top_consumed.map((item) => productRow(CONSUMED, item))}
+                    />
+                    <DataTable table={productTable(report.top_consumed, 'Saída(s)')} />
+                  </div>
+                }
               >
                 <BarList
                   empty="Nenhum consumo no período."
-                  rows={report.top_consumed.map((item) => ({
-                    key: item.product_name,
-                    label: item.product_name,
-                    segments: [{ series: CONSUMED, value: item.units }],
-                  }))}
+                  onSelect={goToHistory}
+                  rows={report.top_consumed.slice(0, TOP_PRODUCTS).map((item) => productRow(CONSUMED, item))}
                 />
               </ChartCard>
             </div>
@@ -430,31 +769,24 @@ export function HouseholdReports() {
               title="Atividade por membro"
               description="Operações de cada pessoa no período (inclusões, consumos e descartes; edições e exclusões no total)."
               legend={[ADDED, CONSUMED_OPS, DISCARDED_OPS]}
-              table={{
-                columns: ['Pessoa', 'Adicionou', 'Consumiu', 'Descartou', 'Outras', 'Total'],
-                rows: report.members.map((member) => [
-                  `${member.user.name}${member.is_member ? '' : ' (ex-membro)'}`,
-                  member.added,
-                  member.consumed,
-                  member.discarded,
-                  member.other,
-                  member.total,
-                ]),
-              }}
+              table={memberTable(report.members.slice(0, TOP_PRODUCTS))}
+              detail={
+                <div className="flex flex-col gap-4">
+                  <BarList
+                    unit="op."
+                    empty="Nenhuma operação no período."
+                    onSelect={(id) => navigate(`/households/${householdId}/activities?user=${id}`)}
+                    rows={memberRows(report.members)}
+                  />
+                  <DataTable table={memberTable(report.members)} />
+                </div>
+              }
             >
               <BarList
                 unit="op."
                 empty="Nenhuma operação no período."
-                rows={report.members.map((member) => ({
-                  key: String(member.user.id),
-                  label: `${member.user.name}${member.is_member ? '' : ' (ex-membro)'}`,
-                  segments: [
-                    { series: ADDED, value: member.added },
-                    { series: CONSUMED_OPS, value: member.consumed },
-                    { series: DISCARDED_OPS, value: member.discarded },
-                  ],
-                  valueLabel: `${member.total} op.`,
-                }))}
+                onSelect={(id) => navigate(`/households/${householdId}/activities?user=${id}`)}
+                rows={memberRows(report.members.slice(0, TOP_PRODUCTS))}
               />
             </ChartCard>
 

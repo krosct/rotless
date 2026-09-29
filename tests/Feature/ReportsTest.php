@@ -87,11 +87,27 @@ it('sums consumed and discarded units, the use rate and the rankings', function 
         'operations' => 5,
     ])
         ->and($report['totals']['avg_days_to_consume'])->toBe(2.5)
+        ->and($report['totals']['median_days_to_consume'])->toBe(2.5)
         ->and($report['period']['bucket'])->toBe('day')
         ->and($report['timeline'])->toHaveCount(30)
         ->and(collect($report['timeline'])->sum('consumed'))->toBe(6)
-        ->and($report['top_consumed'])->toBe([['product_name' => 'Leite', 'units' => 6]])
-        ->and($report['top_discarded'])->toBe([['product_name' => 'Pão', 'units' => 1]]);
+        ->and(collect($report['timeline'])->sum('added'))->toBe(10)
+        ->and($report['top_consumed'])->toBe([
+            ['product_name' => 'Leite', 'units' => 6, 'events' => 2, 'last_at' => '2026-09-23'],
+        ])
+        ->and($report['top_discarded'])->toBe([
+            ['product_name' => 'Pão', 'units' => 1, 'events' => 1, 'last_at' => '2026-09-24'],
+        ]);
+
+    $consumedDay = collect($report['timeline'])->firstWhere('date', '2026-09-22');
+    expect($consumedDay['consumed'])->toBe(2)
+        ->and($consumedDay['use_rate'])->toBe(1)
+        ->and($consumedDay['consumed_items'])->toBe([['product_name' => 'Leite', 'units' => 2]]);
+
+    $discardedDay = collect($report['timeline'])->firstWhere('date', '2026-09-24');
+    expect($discardedDay['discarded'])->toBe(1)
+        ->and($discardedDay['use_rate'])->toBe(0)
+        ->and($discardedDay['discarded_items'])->toBe([['product_name' => 'Pão', 'units' => 1]]);
 
     $caio = collect($report['members'])->firstWhere('user.name', 'Caio');
     expect($caio)->toMatchArray(['added' => 1, 'consumed' => 1, 'discarded' => 1, 'other' => 0, 'total' => 3, 'is_member' => true]);
