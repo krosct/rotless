@@ -411,10 +411,15 @@ main() {
   log="$LOG_DIR/deploy-$(date -u +%Y%m%dT%H%M%SZ)-${requested:0:12}.log"
   echo "==> Log: ${log}"
 
+  # Created here, not by the redirection below: that one runs in the child,
+  # and tail could otherwise open the file before it exists.
+  : > "$log"
+
   # setsid: a new session, so a dropped SSH connection does not stop it.
-  setsid "$SCRIPT_PATH" --detached "$requested" "$tarball" > "$log" 2>&1 < /dev/null &
+  setsid "$SCRIPT_PATH" --detached "$requested" "$tarball" >> "$log" 2>&1 < /dev/null &
   pid=$!
-  tail -n +1 -f --pid="$pid" "$log"
+  # The exit code is the deploy's, from wait; tail only mirrors the log.
+  tail -n +1 -f --pid="$pid" "$log" || true
   wait "$pid" || rc=$?
   [[ -z "$tarball" ]] || rm -f "$tarball"
 

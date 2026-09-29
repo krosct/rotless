@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- The deploy job no longer fails when it starts following the VPS log
+  before the log file exists; it always reports the deploy's own result.
+
 ## 0.2.0 - 2026-09-28
 
 Production release on the VPS: FrankenPHP behind Caddy and Cloudflare, rate
