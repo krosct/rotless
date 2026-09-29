@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The back buttons of the household history return to the household
+  settings instead of the user settings.
 - The deploy job no longer fails when it starts following the VPS log
   before the log file exists; it always reports the deploy's own result.
 

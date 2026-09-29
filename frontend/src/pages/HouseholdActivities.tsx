@@ -100,7 +100,7 @@ export function HouseholdActivities() {
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         <button
           type="button"
-          onClick={() => navigate('/settings')}
+          onClick={() => navigate(`/households/${householdId}/settings`)}
           className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 self-start"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -244,7 +244,7 @@ export function HouseholdActivities() {
           </CardContent>
         </Card>
 
-        <Button variant="secondary" onClick={() => navigate('/settings')} className="self-start">
+        <Button variant="secondary" onClick={() => navigate(`/households/${householdId}/settings`)} className="self-start">
           Voltar
         </Button>
       </main>
