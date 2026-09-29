@@ -6,11 +6,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\HouseholdRole;
 use App\Enums\InvitationStatus;
+use App\Enums\MovementAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AcceptInvitationRequest;
 use App\Http\Requests\StoreInvitationRequest;
 use App\Models\Household;
 use App\Models\HouseholdInvitation;
+use App\Models\HouseholdMovement;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,13 +31,21 @@ final class InvitationController extends Controller
             return response()->json(['message' => 'User is already a member.'], 422);
         }
 
-        $invitation = HouseholdInvitation::create([
-            'household_id' => $household->id,
-            'email' => $request->string('email'),
-            'token' => Str::random(64),
-            'status' => InvitationStatus::Pending,
-            'expires_at' => now()->addDays(HouseholdInvitation::VALID_DAYS),
-        ]);
+        $invitation = DB::transaction(function () use ($request, $household): HouseholdInvitation {
+            $invitation = HouseholdInvitation::create([
+                'household_id' => $household->id,
+                'email' => $request->string('email'),
+                'token' => Str::random(64),
+                'status' => InvitationStatus::Pending,
+                'expires_at' => now()->addDays(HouseholdInvitation::VALID_DAYS),
+            ]);
+
+            HouseholdMovement::forHousehold($household, MovementAction::MemberInvited, $request->user(), null, [
+                'email' => [null, $invitation->email],
+            ]);
+
+            return $invitation;
+        });
 
         return response()->json([
             'message' => 'Invitation created.',
@@ -86,6 +96,8 @@ final class InvitationController extends Controller
             ]);
 
             $invitation->update(['status' => InvitationStatus::Accepted]);
+
+            HouseholdMovement::forHousehold($invitation->household, MovementAction::MemberJoined, $request->user(), $request->user());
         });
 
         return response()->json([

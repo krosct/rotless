@@ -10,6 +10,17 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+/** Adds a batch through the API, so its movement is recorded like in the app. */
+function addBatchAs(User $user, Household $household, string $name, int $quantity = 1, int $days = 5): int
+{
+    return test()->actingAs($user, 'sanctum')->postJson('/api/v1/batches', [
+        'household_id' => $household->id,
+        'name' => $name,
+        'quantity' => $quantity,
+        'expires_at' => now()->addDays($days)->toDateString(),
+    ])->assertCreated()->json('data.id');
+}
+
 function householdWithMembers(): array
 {
     $owner = User::factory()->create(['name' => 'Owner']);
@@ -120,17 +131,7 @@ it('never lets the owner role be changed', function () {
 
 it('lists members with joined date and operations count', function () {
     [$owner, $member, $household] = householdWithMembers();
-    $product = Product::create(['name' => 'Rice']);
-
-    Batch::create([
-        'household_id' => $household->id,
-        'product_id' => $product->id,
-        'quantity' => 1,
-        'expires_at' => now()->addDays(5)->toDateString(),
-        'status' => BatchStatus::Active,
-        'created_by' => $member->id,
-        'updated_by' => $member->id,
-    ]);
+    addBatchAs($member, $household, 'Rice');
 
     $response = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/members");
@@ -145,17 +146,7 @@ it('lists members with joined date and operations count', function () {
 
 it('exposes operations count in the current user payload', function () {
     [$owner, $member, $household] = householdWithMembers();
-    $product = Product::create(['name' => 'Rice']);
-
-    Batch::create([
-        'household_id' => $household->id,
-        'product_id' => $product->id,
-        'quantity' => 1,
-        'expires_at' => now()->addDays(5)->toDateString(),
-        'status' => BatchStatus::Active,
-        'created_by' => $member->id,
-        'updated_by' => $member->id,
-    ]);
+    addBatchAs($member, $household, 'Rice');
 
     $response = $this->actingAs($owner, 'sanctum')->getJson('/api/v1/me');
 
@@ -172,17 +163,7 @@ it('lists actors including former members and is owner-only', function () {
     $former = User::factory()->create(['name' => 'Former']);
     $household->users()->attach($former->id, ['role' => HouseholdRole::Member->value]);
 
-    $product = Product::create(['name' => 'Rice']);
-
-    Batch::create([
-        'household_id' => $household->id,
-        'product_id' => $product->id,
-        'quantity' => 1,
-        'expires_at' => now()->addDays(5)->toDateString(),
-        'status' => BatchStatus::Active,
-        'created_by' => $former->id,
-        'updated_by' => $former->id,
-    ]);
+    addBatchAs($former, $household, 'Rice');
 
     // The former member leaves the household.
     $household->users()->detach($former->id);
@@ -206,51 +187,38 @@ it('lists actors including former members and is owner-only', function () {
 
 it('lists household activities with filters and is owner-only', function () {
     [$owner, $member, $household] = householdWithMembers();
-    $rice = Product::create(['name' => 'Rice']);
-    $beans = Product::create(['name' => 'Beans']);
 
-    Batch::create([
-        'household_id' => $household->id,
-        'product_id' => $rice->id,
-        'quantity' => 1,
-        'expires_at' => now()->addDays(5)->toDateString(),
-        'status' => BatchStatus::Active,
-        'created_by' => $member->id,
-        'updated_by' => $member->id,
-    ]);
+    addBatchAs($member, $household, 'Rice');
+    $beans = addBatchAs($owner, $household, 'Beans', 2, 9);
+    $this->actingAs($member, 'sanctum')
+        ->postJson("/api/v1/batches/{$beans}/consume", ['quantity' => 2, 'action' => 'consumed'])
+        ->assertOk();
 
-    Batch::create([
-        'household_id' => $household->id,
-        'product_id' => $beans->id,
-        'quantity' => 2,
-        'expires_at' => now()->addDays(9)->toDateString(),
-        'status' => BatchStatus::Consumed,
-        'created_by' => $owner->id,
-        'updated_by' => $member->id,
-    ]);
-
-    // Guests must not see the operations report.
+    // Plain members must not see the history.
     $this->actingAs($member, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/activities")
         ->assertForbidden();
 
     $all = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/activities");
-    $all->assertOk()->assertJsonCount(2, 'data');
+    $all->assertOk()->assertJsonCount(3, 'data')
+        ->assertJsonPath('data.0.action', 'consumed')
+        ->assertJsonPath('data.0.user.name', 'Member');
 
     $byUser = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/activities?user_id={$member->id}");
     $byUser->assertOk()->assertJsonCount(2, 'data');
 
     $search = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/households/{$household->id}/activities?search=Rice");
+        ->getJson("/api/v1/households/{$household->id}/activities?search=rice");
     $search->assertOk()->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.product_name', 'Rice');
 
-    $status = $this->actingAs($owner, 'sanctum')
-        ->getJson("/api/v1/households/{$household->id}/activities?status=consumed");
-    $status->assertOk()->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.product_name', 'Beans');
+    $consumed = $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/activities?action=consumed");
+    $consumed->assertOk()->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.product_name', 'Beans')
+        ->assertJsonPath('data.0.quantity', 2);
 });
 
 it('lets only the owner remove a member and never the owner', function () {
