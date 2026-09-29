@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "bash scripts/dev.sh",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
