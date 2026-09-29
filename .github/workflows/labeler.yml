@@ -1,0 +1,20 @@
+name: PR Labeler
+
+# pull_request_target is required so the job has a write token on pull requests
+# from forks; this workflow never checks out or runs code from the PR.
+on:
+    pull_request_target:
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    labeler:
+        name: Apply path labels
+        runs-on: ubuntu-latest
+        steps:
+            - name: Label PR by changed paths
+              uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+              with:
+                  sync-labels: true
