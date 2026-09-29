@@ -152,11 +152,31 @@ function touch(batch: DemoBatch, db: DemoDb): void {
 
 // --- Telegram: the only calls that reach the server --------------------------
 
+// Shown to demo visitors instead of raw HTTP errors.
+const SERVER_UNAVAILABLE =
+  'O servidor do rotless não respondeu. A mensagem de demonstração do Telegram precisa do servidor no ar.';
+const BOT_UNAVAILABLE = 'O bot do Telegram não está disponível agora. Tente novamente em alguns minutos.';
+const TOO_MANY_REQUESTS = 'Muitas tentativas seguidas. Aguarde um minuto e tente novamente.';
+
 async function realRequest<T>(url: string, method: 'GET' | 'POST'): Promise<T> {
-  const response = await fetch(url, { method, headers: { Accept: 'application/json' } });
+  let response: Response;
+  try {
+    response = await fetch(url, { method, headers: { Accept: 'application/json' } });
+  } catch {
+    throw new ApiError(0, SERVER_UNAVAILABLE);
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = (data as { message?: string } | null)?.message ?? `Request failed with status ${response.status}`;
+    // 503 is the API saying the bot is unreachable; other 5xx (502/504) come
+    // from a proxy with no API behind it.
+    const message =
+      response.status === 503
+        ? BOT_UNAVAILABLE
+        : response.status === 429
+        ? TOO_MANY_REQUESTS
+        : response.status >= 500
+        ? SERVER_UNAVAILABLE
+        : (data as { message?: string } | null)?.message ?? SERVER_UNAVAILABLE;
     throw new ApiError(response.status, message, data);
   }
   return data as T;

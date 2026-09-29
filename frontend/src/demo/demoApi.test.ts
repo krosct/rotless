@@ -96,6 +96,24 @@ describe('demo API', () => {
     expect(user.telegram_chat_name).toBe('Ana (demonstração)');
   });
 
+  it.each([
+    [502, 'O servidor do rotless não respondeu'],
+    [503, 'O bot do Telegram não está disponível'],
+    [429, 'Muitas tentativas seguidas'],
+  ])('explains a %i from the Telegram demo link in Portuguese', async (status, message) => {
+    fetchMock.mockResolvedValueOnce(new Response('Bad Gateway', { status }));
+
+    await expect(apiClient('/api/v1/telegram/link', { method: 'POST' })).rejects.toThrow(message);
+  });
+
+  it('explains a network failure on the Telegram demo link', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    await expect(apiClient('/api/v1/telegram/link', { method: 'POST' })).rejects.toThrow(
+      'O servidor do rotless não respondeu'
+    );
+  });
+
   it('throws everything away on logout', async () => {
     await logout();
 
