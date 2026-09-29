@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="img/rotless_logo_3.png" alt="rotless — Smart Pantry, Reduce Waste" width="440" />
+</p>
+
 # rotless
 
 Smart pantry web app — *"rot less"* (less food waste). Tracks household food batches and expiry dates, warning members via Telegram before food expires.
@@ -17,6 +21,20 @@ docker compose up -d
 docker compose exec app composer install
 docker compose exec app php artisan migrate
 ```
+
+## Local dev
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+`npm run dev` starts the Docker stack (`app`, `db`, `queue`, `scheduler`) when it
+is not already running, waits for the API health check, then starts the Vite dev
+server. When you stop it (Ctrl+C), it stops the stack again — but only if it was
+the one that started it; a stack that was already running is left untouched.
+Requires Docker and `docker-compose.yml` one level above `frontend/`.
 
 ## Deploy
 

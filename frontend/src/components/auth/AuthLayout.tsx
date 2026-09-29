@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Leaf, Bell, Barcode, ShieldCheck } from 'lucide-react';
+import { Bell, Barcode, ShieldCheck } from 'lucide-react';
 
 export interface AuthLayoutProps {
   children: React.ReactNode;
@@ -30,9 +30,7 @@ export function AuthLayout({ children, onShieldTripleTap }: AuthLayoutProps) {
       <div className="w-full max-w-md flex flex-col items-center">
         {/* Brand header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-[#2d6a4f] text-white flex items-center justify-center shadow-md mb-3">
-            <Leaf className="w-7 h-7 text-emerald-200" />
-          </div>
+          <img src="/rotless_logo_256.png" alt="rotless" className="w-14 h-14 object-contain mb-2" />
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
             rot<span className="text-[#2d6a4f] dark:text-emerald-400">less</span>
           </h1>
