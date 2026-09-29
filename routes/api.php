@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\HouseholdController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\TelegramController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::get('/v1/batches/{batch}', [BatchController::class, 'show']);
     Route::patch('/v1/batches/{batch}', [BatchController::class, 'update']);
     Route::delete('/v1/batches/{batch}', [BatchController::class, 'destroy']);
+    Route::post('/v1/batches/{batch}/consume', [BatchController::class, 'consume']);
     Route::get('/v1/openfoodfacts/{barcode}', [BatchController::class, 'lookupBarcode']);
     Route::patch('/v1/products/{product}', [ProductController::class, 'update']);
     Route::post('/v1/households/{household}/invitations', [InvitationController::class, 'store']);
@@ -38,6 +40,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::get('/v1/households/{household}/members', [HouseholdController::class, 'members']);
     Route::get('/v1/households/{household}/activities', [HouseholdController::class, 'activities']);
     Route::get('/v1/households/{household}/actors', [HouseholdController::class, 'actors']);
+    Route::get('/v1/households/{household}/reports', [ReportController::class, 'show']);
     Route::delete('/v1/households/{household}/members/{user}', [HouseholdController::class, 'removeMember']);
     Route::patch('/v1/households/{household}/members/{user}/role', [HouseholdController::class, 'updateMemberRole']);
     Route::post('/v1/invitations/accept', [InvitationController::class, 'accept']);

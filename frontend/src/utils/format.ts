@@ -19,5 +19,7 @@ export function formatQuantity(quantity: number, unit: string = 'un'): string {
 }
 
 export function getTodayISODate(): string {
-  return new Date().toISOString().split('T')[0];
+  // Local calendar day. toISOString() would return the UTC day, which is
+  // already tomorrow in the evening in Brasília (UTC-3).
+  return format(new Date(), 'yyyy-MM-dd');
 }

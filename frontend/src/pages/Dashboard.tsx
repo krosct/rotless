@@ -4,6 +4,7 @@ import {
   useBatches,
   useCreateBatch,
   useUpdateBatch,
+  useConsumeBatch,
   useDeleteBatch,
   useUpdateProduct,
 } from '@/hooks/useBatches';
@@ -25,6 +26,7 @@ export function Dashboard() {
   const { data: batches = [], isLoading } = useBatches(currentHousehold?.id);
   const createMutation = useCreateBatch();
   const updateMutation = useUpdateBatch();
+  const consumeMutation = useConsumeBatch();
   const deleteMutation = useDeleteBatch();
   const updateProductMutation = useUpdateProduct();
 
@@ -81,13 +83,11 @@ export function Dashboard() {
     const entry = consumeTarget.group.entries.find((item) => item.batch.id === batchId);
     if (!entry) return;
 
-    const isFullQuantity = quantity >= entry.quantity;
-
-    await updateMutation.mutateAsync({
+    // The API marks the batch consumed/discarded when every unit goes, and
+    // records how many units went either way.
+    await consumeMutation.mutateAsync({
       id: batchId,
-      input: isFullQuantity
-        ? { status: consumeTarget.action }
-        : { quantity: entry.quantity - quantity },
+      input: { quantity: Math.min(quantity, entry.quantity), action: consumeTarget.action },
     });
 
     setConsumeTarget(null);
@@ -117,7 +117,7 @@ export function Dashboard() {
 
     await Promise.all(
       activeEntries.map((entry) =>
-        updateMutation.mutateAsync({ id: entry.batch.id, input: { status: action } })
+        consumeMutation.mutateAsync({ id: entry.batch.id, input: { quantity: entry.quantity, action } })
       )
     );
 
@@ -222,7 +222,7 @@ export function Dashboard() {
       <ProductEditModal
         isOpen={!!editingGroup}
         group={editingGroup}
-        isLoading={updateMutation.isPending || updateProductMutation.isPending}
+        isLoading={updateMutation.isPending || updateProductMutation.isPending || consumeMutation.isPending}
         onClose={() => setEditingProductId(null)}
         onSaveProduct={handleSaveProduct}
         onSaveEntry={handleSaveEntry}
@@ -235,7 +235,7 @@ export function Dashboard() {
         action={consumeTarget?.action ?? 'consumed'}
         productName={consumeTarget?.group.product.name ?? ''}
         entries={consumeTarget?.group.entries ?? []}
-        isLoading={updateMutation.isPending}
+        isLoading={consumeMutation.isPending}
         onClose={() => setConsumeTarget(null)}
         onConfirm={handleConsumeConfirm}
       />

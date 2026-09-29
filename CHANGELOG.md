@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Every operation is stored in `household_movements`: batches added,
+  edited, consumed or discarded (partially or fully) and deleted, product
+  edits, household renames, invitations, members joining, leaving and
+  changing role, with who did it and each field's before and after. Batches
+  that existed before are backfilled (insert-only migration).
+- `POST /api/v1/batches/{id}/consume` consumes or discards some or all units
+  of a batch; partial consumption now shows in the history with its units.
+- Household history rebuilt on the movements: a timeline by day that leads
+  with who did what ("Marina consumiu 2 un de Leite") and lists each change
+  ("Validade: 01/10 → 03/10"), including deletions, with filters and paging.
+- Reports for owners and managers (`GET /api/v1/households/{id}/reports`,
+  "Ver relatórios" under the history): use rate against the previous period,
+  consumption vs waste over time, what is at risk now and expiring next,
+  most wasted and most consumed products, activity per member, and tips on
+  where to act. Every chart has a table view and works in dark mode.
 - The footer shows the site version (`git describe`: the release tag, plus
   the commits since it when there are any).
 - Demo mode: three taps on the shield of the login screen open a test
@@ -18,8 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   makes the bot send a sample alert, without linking any account
   (`POST /api/v1/telegram/demo-link`).
 
+### Changed
+
+- The app runs on Brasília time (America/Sao_Paulo) instead of UTC: expiry
+  validation, the daily expiry alerts (now at 08:00) and the reports follow the
+  household's calendar. A one-off, data-preserving migration shifts the
+  timestamps already stored back by 3 hours.
+
 ### Fixed
 
+- Reports no longer drop the first hours of the previous comparison period.
+- The new batch form no longer offers tomorrow as "today" in the evening.
 - The back buttons of the household history return to the household
   settings instead of the user settings.
 - The deploy job no longer fails when it starts following the VPS log

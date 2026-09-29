@@ -76,6 +76,18 @@ export async function updateBatch(id: number | string, input: UpdateBatchInput):
   return unwrap(payload);
 }
 
+/** Consumes or discards some (or all) units of an active batch. */
+export async function consumeBatch(
+  id: number | string,
+  input: { quantity: number; action: 'consumed' | 'discarded' }
+): Promise<Batch> {
+  const payload = await apiClient<Batch | DataEnvelope<Batch>>(`/api/v1/batches/${id}/consume`, {
+    method: 'POST',
+    body: input,
+  });
+  return unwrap(payload);
+}
+
 export async function deleteBatch(id: number | string): Promise<{ message: string }> {
   return apiClient<{ message: string }>(`/api/v1/batches/${id}`, {
     method: 'DELETE',

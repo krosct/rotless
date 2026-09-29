@@ -44,3 +44,28 @@ input[type='number'] {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(150, 150, 150, 0.5);
 }
+
+/* Report charts. Series colors follow the entity across every chart
+   (consumed, discarded, added); validated for color-vision deficiency and
+   contrast against the card surfaces (white / stone-900) in both modes.
+   Status colors (expired, expiring, fine) are fixed and always ship with an
+   icon and a label. */
+:root {
+  --viz-consumed: #2a78d6;
+  --viz-discarded: #eb6834;
+  --viz-added: #1baf7a;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-critical: #d03b3b;
+  --viz-muted: #d6d3d1;
+  --viz-grid: #e7e5e4;
+  --viz-surface: #ffffff;
+}
+.dark {
+  --viz-consumed: #3987e5;
+  --viz-discarded: #d95926;
+  --viz-added: #199e70;
+  --viz-muted: #57534e;
+  --viz-grid: #292524;
+  --viz-surface: #1c1917;
+}

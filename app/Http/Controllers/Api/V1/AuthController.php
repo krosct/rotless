@@ -10,8 +10,8 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\UpdatePasswordRequest;
 use App\Http\Requests\UpdateProfileRequest;
-use App\Models\Batch;
 use App\Models\Household;
+use App\Models\HouseholdMovement;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\JsonResponse;
@@ -109,11 +109,11 @@ final class AuthController extends Controller
             /** @var Pivot $pivot */
             $pivot = $household->getAttribute('pivot');
 
-            $operationsByUser = Batch::query()
+            $operationsByUser = HouseholdMovement::query()
                 ->where('household_id', $household->id)
-                ->whereNotNull('created_by')
-                ->selectRaw('created_by as user_id, count(*) as total')
-                ->groupBy('created_by')
+                ->whereNotNull('user_id')
+                ->selectRaw('user_id, count(*) as total')
+                ->groupBy('user_id')
                 ->pluck('total', 'user_id');
 
             $members = $household->users()

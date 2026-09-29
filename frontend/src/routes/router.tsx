@@ -8,6 +8,7 @@ import { BatchEdit } from '@/pages/BatchEdit';
 import { Settings } from '@/pages/Settings';
 import { HouseholdSettings } from '@/pages/HouseholdSettings';
 import { HouseholdActivities } from '@/pages/HouseholdActivities';
+import { HouseholdReports } from '@/pages/HouseholdReports';
 import { AcceptInvite } from '@/pages/AcceptInvite';
 import { resolveReturnTo, clearInviteReturnTo } from '@/utils/inviteReturnTo';
 import { Loader2 } from 'lucide-react';
@@ -131,6 +132,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <HouseholdActivities />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/households/:householdId/reports',
+    element: (
+      <ProtectedRoute>
+        <HouseholdReports />
       </ProtectedRoute>
     ),
   },
