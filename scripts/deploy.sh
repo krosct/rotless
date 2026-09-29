@@ -125,7 +125,8 @@ resolve_target() {
   local requested="$1" tip
 
   echo "==> Fetching origin/${BRANCH}"
-  git fetch --quiet origin "$BRANCH"
+  # --tags: the release tags name the version shown in the footer.
+  git fetch --quiet --tags origin "$BRANCH"
   tip="$(git rev-parse "origin/${BRANCH}")"
 
   if [[ "$requested" != "$tip" ]]; then
@@ -151,7 +152,7 @@ stage_checkout() {
 # there is none (manual run): host npm, or a disposable Node 22 container so
 # the VPS does not need Node.
 stage_frontend() {
-  local tarball="$1" dist="$STAGE_DIR/frontend/dist"
+  local tarball="$1" dist="$STAGE_DIR/frontend/dist" version
 
   if [[ -n "$tarball" ]]; then
     echo "==> Unpacking the frontend built by the workflow"
@@ -163,12 +164,15 @@ stage_frontend() {
   fi
 
   echo "==> Building the frontend on the VPS (no tarball on stdin; slow on a 1 GB VPS)"
+  # Computed here: the Node container has no git for vite.config.ts to ask.
+  version="$(git -C "$STAGE_DIR" describe --tags --always)"
   if command -v npm >/dev/null 2>&1; then
-    (cd "$STAGE_DIR/frontend" && npm ci --no-audit --no-fund && npm run build)
+    (cd "$STAGE_DIR/frontend" && npm ci --no-audit --no-fund && APP_VERSION="$version" npm run build)
   else
     mkdir -p "$STATE_DIR/npm-cache"
     "${DOCKER[@]}" run --rm \
       --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/npm-cache \
+      -e APP_VERSION="$version" \
       -v "$STAGE_DIR/frontend:/app" -v "$STATE_DIR/npm-cache:/npm-cache" -w /app \
       node:22-alpine sh -c "npm ci --no-audit --no-fund && npm run build"
   fi

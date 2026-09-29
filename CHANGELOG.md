@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- The footer shows the site version (`git describe`: the release tag, plus
+  the commits since it when there are any).
+
 ### Fixed
 
 - The deploy job no longer fails when it starts following the VPS log

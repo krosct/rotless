@@ -41,6 +41,8 @@ jobs:
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   ref: ${{ github.event.workflow_run.head_sha }}
+                  # Full history and tags: the footer shows `git describe`.
+                  fetch-depth: 0
                   persist-credentials: false
 
             - name: Setup Node
