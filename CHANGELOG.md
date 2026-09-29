@@ -33,8 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   makes the bot send a sample alert, without linking any account
   (`POST /api/v1/telegram/demo-link`).
 
+### Changed
+
+- The app runs on Brasília time (America/Sao_Paulo) instead of UTC: expiry
+  validation, the daily expiry alerts (now at 08:00) and the reports follow the
+  household's calendar. A one-off, data-preserving migration shifts the
+  timestamps already stored back by 3 hours.
+
 ### Fixed
 
+- Reports no longer drop the first hours of the previous comparison period.
+- The new batch form no longer offers tomorrow as "today" in the evening.
 - The back buttons of the household history return to the household
   settings instead of the user settings.
 - The deploy job no longer fails when it starts following the VPS log

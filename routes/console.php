@@ -8,4 +8,6 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('app:check-expiring-batches')->daily();
+// 08:00 in the app timezone (Brasília): alerts arrive in the morning, not at
+// midnight.
+Schedule::command('app:check-expiring-batches')->dailyAt('08:00');

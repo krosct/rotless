@@ -68,13 +68,13 @@ it('validates the period and the timezone', function () {
 it('sums consumed and discarded units, the use rate and the rankings', function () {
     [$owner, $manager, $member, $household] = reportsHousehold();
 
-    $milk = addAt('2026-09-20 12:00:00', $owner, $household, 'Leite', 6);
-    $bread = addAt('2026-09-21 12:00:00', $member, $household, 'Pão', 4);
-    consumeAt('2026-09-22 12:00:00', $manager, $milk, 2, 'consumed');
-    consumeAt('2026-09-23 12:00:00', $member, $milk, 4, 'consumed');
-    consumeAt('2026-09-24 12:00:00', $member, $bread, 1, 'discarded');
+    $milk = addAt('2026-09-20 12:00:00 UTC', $owner, $household, 'Leite', 6);
+    $bread = addAt('2026-09-21 12:00:00 UTC', $member, $household, 'Pão', 4);
+    consumeAt('2026-09-22 12:00:00 UTC', $manager, $milk, 2, 'consumed');
+    consumeAt('2026-09-23 12:00:00 UTC', $member, $milk, 4, 'consumed');
+    consumeAt('2026-09-24 12:00:00 UTC', $member, $bread, 1, 'discarded');
 
-    Carbon::setTestNow('2026-09-29 12:00:00');
+    Carbon::setTestNow('2026-09-29 12:00:00 UTC');
     $report = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/reports?days=30&timezone=UTC")
         ->assertOk()->json('data');
@@ -100,12 +100,12 @@ it('sums consumed and discarded units, the use rate and the rankings', function 
 it('compares with the previous period', function () {
     [$owner, , , $household] = reportsHousehold();
 
-    $old = addAt('2026-09-01 12:00:00', $owner, $household, 'Leite', 2);
-    consumeAt('2026-09-02 12:00:00', $owner, $old, 2, 'discarded');
-    $new = addAt('2026-09-26 12:00:00', $owner, $household, 'Leite', 2);
-    consumeAt('2026-09-27 12:00:00', $owner, $new, 2, 'consumed');
+    $old = addAt('2026-09-01 12:00:00 UTC', $owner, $household, 'Leite', 2);
+    consumeAt('2026-09-02 12:00:00 UTC', $owner, $old, 2, 'discarded');
+    $new = addAt('2026-09-26 12:00:00 UTC', $owner, $household, 'Leite', 2);
+    consumeAt('2026-09-27 12:00:00 UTC', $owner, $new, 2, 'consumed');
 
-    Carbon::setTestNow('2026-09-29 12:00:00');
+    Carbon::setTestNow('2026-09-29 12:00:00 UTC');
     $report = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/reports?days=7&timezone=UTC")
         ->assertOk()->json('data');
@@ -124,10 +124,10 @@ it('buckets days in the viewer timezone and weeks for 90 days', function () {
     [$owner, , , $household] = reportsHousehold();
 
     // 22:30 in São Paulo on the 28th is already the 29th in UTC.
-    $batch = addAt('2026-09-28 12:00:00', $owner, $household, 'Leite', 1);
-    consumeAt('2026-09-29 01:30:00', $owner, $batch, 1, 'consumed');
+    $batch = addAt('2026-09-28 12:00:00 UTC', $owner, $household, 'Leite', 1);
+    consumeAt('2026-09-29 01:30:00 UTC', $owner, $batch, 1, 'consumed');
 
-    Carbon::setTestNow('2026-09-29 12:00:00');
+    Carbon::setTestNow('2026-09-29 12:00:00 UTC');
     $local = $this->actingAs($owner, 'sanctum')
         ->getJson("/api/v1/households/{$household->id}/reports?days=7&timezone=America/Sao_Paulo")
         ->assertOk()->json('data');
@@ -141,4 +141,21 @@ it('buckets days in the viewer timezone and weeks for 90 days', function () {
     expect($quarter['period']['bucket'])->toBe('week')
         ->and(collect($quarter['timeline'])->sum('consumed'))->toBe(1)
         ->and(count($quarter['timeline']))->toBeGreaterThanOrEqual(13);
+});
+
+it('does not drop the first hours of the previous period', function () {
+    [$owner, , , $household] = reportsHousehold();
+
+    // "days=7" at 2026-09-29 12:00 UTC opens the previous window at
+    // 2026-09-16 00:00 UTC. This movement is one hour into it; stored on the
+    // app clock (São Paulo) it reads 2026-09-15 22:00.
+    addAt('2026-09-16 01:00:00 UTC', $owner, $household, 'Leite', 1);
+
+    Carbon::setTestNow('2026-09-29 12:00:00 UTC');
+    $report = $this->actingAs($owner, 'sanctum')
+        ->getJson("/api/v1/households/{$household->id}/reports?days=7&timezone=UTC")
+        ->assertOk()->json('data');
+
+    expect($report['previous']['added_units'])->toBe(1)
+        ->and($report['totals']['added_units'])->toBe(0);
 });
