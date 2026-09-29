@@ -45,9 +45,11 @@ final class ReportController extends Controller
         $start = $today->subDays($days - 1);
         $previousStart = $start->subDays($days);
 
+        // Timestamps are stored on the app clock, so the window bound must be
+        // converted to it too; a raw UTC bound would drop the first hours.
         $movements = HouseholdMovement::query()
             ->where('household_id', $household->id)
-            ->where('created_at', '>=', $previousStart->utc())
+            ->where('created_at', '>=', $previousStart->setTimezone((string) config('app.timezone')))
             ->get(['action', 'user_id', 'batch_id', 'product_name', 'quantity', 'created_at'])
             ->each(fn (HouseholdMovement $movement) => $movement->setAttribute(
                 'local_at',
