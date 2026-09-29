@@ -17,6 +17,9 @@ Route::post('/v1/register', [AuthController::class, 'register'])->middleware('th
 Route::post('/v1/login', [AuthController::class, 'login'])->middleware('throttle:login');
 Route::get('/v1/invitations/info/{token}', [InvitationController::class, 'info'])->middleware('throttle:public');
 Route::post('/v1/telegram/webhook', [TelegramController::class, 'webhook'])->middleware('throttle:webhook');
+// Demo mode (login screen shortcut): the bot sends a sample message, links nothing.
+Route::post('/v1/telegram/demo-link', [TelegramController::class, 'demoLink'])->middleware('throttle:public');
+Route::get('/v1/telegram/demo-link/{token}', [TelegramController::class, 'demoLinkStatus'])->middleware('throttle:public');
 
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::post('/v1/logout', [AuthController::class, 'logout']);

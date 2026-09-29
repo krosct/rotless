@@ -17,7 +17,7 @@ export interface HeaderProps {
 }
 
 export function Header({ onOpenNewBatchModal }: HeaderProps) {
-  const { user, logout, theme, toggleTheme } = useAuth();
+  const { user, logout, theme, toggleTheme, isDemo } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -114,6 +114,23 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
           </div>
         </div>
       </div>
+      {isDemo && (
+        <div className="border-t border-amber-200/70 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-1.5 flex items-center justify-between gap-3 text-xs">
+            <span>
+              <strong className="font-semibold">Modo demonstração</strong> — dados fictícios; tudo o que você fizer
+              aqui é descartado ao sair.
+            </span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="shrink-0 font-semibold underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-100"
+            >
+              Sair da demonstração
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Household } from '@/types';
 import { ApiError, getToken, removeToken } from '@/api/client';
+import { DEMO_TOKEN, isDemoActive } from '@/demo/session';
 import * as authApi from '@/api/auth';
 
 // A transient /me failure (aborted request, network hiccup, 5xx) must not sign
@@ -34,6 +35,9 @@ interface AuthContextType {
   register: (input: authApi.RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  /** Enters the demo mode: a fake account on a fake database, discarded on logout. */
+  enterDemo: () => Promise<void>;
+  isDemo: boolean;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
 }
@@ -143,6 +147,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const enterDemo = async () => {
+    setIsSubmitting(true);
+    try {
+      const { startDemo } = await import('@/demo/demoApi');
+      startDemo();
+      setTokenState(DEMO_TOKEN);
+      await refreshMe();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const logout = async () => {
     try {
       await authApi.logout();
@@ -165,6 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     refreshMe,
+    enterDemo,
+    isDemo: !!token && isDemoActive(),
     theme,
     toggleTheme,
   };

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TelegramWebhookRequest;
+use App\Models\TelegramDemoToken;
 use App\Models\TelegramLinkToken;
 use App\Services\TelegramClient;
 use Illuminate\Http\JsonResponse;
@@ -49,6 +50,57 @@ final class TelegramController extends Controller
                 'bot_username' => $username,
                 'start_command' => "/start {$plain}",
                 'expires_at' => $token->expires_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * Link token for the demo mode (no account): the bot answers it with a
+     * sample alert and links nothing. Same shape as link().
+     */
+    public function demoLink(): JsonResponse
+    {
+        try {
+            $username = $this->resolveBotUsername();
+        } catch (Throwable) {
+            return response()->json([
+                'message' => 'Telegram bot is not reachable. Check TELEGRAM_BOT_TOKEN.',
+            ], 503);
+        }
+
+        // Demo tokens are throwaway: keep the table small.
+        TelegramDemoToken::query()->where('created_at', '<', now()->subDay())->delete();
+
+        $plain = Str::random(48);
+
+        $token = TelegramDemoToken::create([
+            'token_hash' => hash('sha256', $plain),
+            'expires_at' => now()->addMinutes(self::LINK_TTL_MINUTES),
+        ]);
+
+        return response()->json([
+            'data' => [
+                'url' => "https://t.me/{$username}?start={$plain}",
+                'bot_username' => $username,
+                'start_command' => "/start {$plain}",
+                'expires_at' => $token->expires_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /** Lets the demo mode see when the bot answered its token. */
+    public function demoLinkStatus(string $token): JsonResponse
+    {
+        $record = TelegramDemoToken::query()->where('token_hash', hash('sha256', $token))->first();
+
+        if ($record === null) {
+            return response()->json(['message' => 'Not found.'], 404);
+        }
+
+        return response()->json([
+            'data' => [
+                'linked' => $record->used_at !== null,
+                'chat_name' => $record->chat_name,
             ],
         ]);
     }
@@ -132,6 +184,10 @@ final class TelegramController extends Controller
             ->first();
 
         if ($record === null) {
+            if ($this->answerDemoToken($token, $chatId, $chatName)) {
+                return;
+            }
+
             $this->reply($chatId, 'This linking link is invalid or has expired. Generate a new one in the rotless app.');
 
             return;
@@ -144,6 +200,36 @@ final class TelegramController extends Controller
         $record->update(['used_at' => now()]);
 
         $this->reply($chatId, 'Your rotless account is now linked. You will receive expiry alerts here.');
+    }
+
+    /** Answers a demo token with a sample alert; links no account. */
+    private function answerDemoToken(string $token, string $chatId, ?string $chatName): bool
+    {
+        $record = TelegramDemoToken::query()
+            ->where('token_hash', hash('sha256', $token))
+            ->whereNull('used_at')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if ($record === null) {
+            return false;
+        }
+
+        $record->update(['used_at' => now(), 'chat_name' => $chatName]);
+
+        $this->reply($chatId, implode("\n", [
+            '🔔 rotless — mensagem de demonstração',
+            '',
+            'É assim que os avisos de validade chegam aqui:',
+            '• Leite integral (2 un) vence amanhã',
+            '• Iogurte natural vence em 2 dias',
+            '• Peito de frango venceu ontem',
+            '',
+            'Esta é uma conta de teste: nenhuma conta foi vinculada e você não receberá outros avisos.',
+            'Crie sua conta no rotless para receber os alertas da sua despensa.',
+        ]));
+
+        return true;
     }
 
     private function reply(string $chatId, string $message): void

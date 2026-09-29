@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The footer shows the site version (`git describe`: the release tag, plus
   the commits since it when there are any).
+- Demo mode: three taps on the shield of the login screen open a test
+  account ("Teste") in a fictitious household with five people and a
+  history of 100 operations, all in the browser and discarded on logout.
+  Expiry dates are relative to the day it is opened. Linking Telegram there
+  makes the bot send a sample alert, without linking any account
+  (`POST /api/v1/telegram/demo-link`).
 
 ### Fixed
 
