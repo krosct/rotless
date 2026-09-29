@@ -3,7 +3,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { HouseholdSwitcher } from './HouseholdSwitcher';
 import {
-  Leaf,
   LogOut,
   Moon,
   Sun,
@@ -35,9 +34,11 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
             to="/dashboard"
             className="flex items-center gap-2 group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl p-1"
           >
-            <div className="w-9 h-9 rounded-xl bg-[#2d6a4f] text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <Leaf className="w-5 h-5 text-emerald-200" />
-            </div>
+            <img
+              src="/rotless_logo_128.png"
+              alt=""
+              className="w-9 h-9 object-contain group-hover:scale-105 transition-transform"
+            />
             <span className="font-bold text-xl tracking-tight text-stone-900 dark:text-white">
               rot<span className="text-[#2d6a4f] dark:text-emerald-400">less</span>
             </span>

@@ -5,7 +5,7 @@ import { getInvitationInfo, acceptInvitation } from '@/api/invitations';
 import { InvitationInfo } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Users, Leaf, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Users, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { rememberInviteReturnTo } from '@/utils/inviteReturnTo';
 
@@ -85,9 +85,7 @@ export function AcceptInvite() {
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-stone-50 dark:bg-stone-950 transition-colors">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-[#2d6a4f] text-white flex items-center justify-center shadow-md mb-3">
-            <Leaf className="w-7 h-7 text-emerald-200" />
-          </div>
+          <img src="/rotless_logo_256.png" alt="rotless" className="w-14 h-14 object-contain mb-2" />
           <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-white">
             rot<span className="text-[#2d6a4f] dark:text-emerald-400">less</span>
           </h1>
