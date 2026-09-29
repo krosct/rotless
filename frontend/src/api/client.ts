@@ -1,4 +1,5 @@
 import { ApiValidationError } from '@/types';
+import { DEMO_TOKEN, isDemoActive } from '@/demo/session';
 
 export const TOKEN_STORAGE_KEY = 'rotless_token';
 
@@ -17,6 +18,9 @@ export class ApiError extends Error {
 }
 
 export function getToken(): string | null {
+  if (isDemoActive()) {
+    return DEMO_TOKEN;
+  }
   try {
     return localStorage.getItem(TOKEN_STORAGE_KEY);
   } catch {
@@ -49,6 +53,12 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
   // development Vite proxies that prefix to Laravel; in production Caddy routes
   // it. Keeping every request relative guarantees dev and prod behave the same.
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+  // Demo mode answers from its fake database (loaded only when used).
+  if (isDemoActive()) {
+    const { handleDemoRequest } = await import('@/demo/demoApi');
+    return handleDemoRequest<T>(url, options);
+  }
 
   const headers = new Headers(options.headers || {});
 

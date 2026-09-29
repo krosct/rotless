@@ -100,7 +100,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
 }
 
 export function Settings() {
-  const { user, refreshMe } = useAuth();
+  const { user, refreshMe, isDemo } = useAuth();
 
   // Profile states
   const [name, setName] = useState(user?.name || '');
@@ -415,7 +415,9 @@ export function Settings() {
 
           <CardContent className="flex flex-col gap-3">
             <p className="text-xs text-stone-500 dark:text-stone-400">
-              {isTelegramLinked
+              {isDemo
+                ? 'Na demonstração, o bot responde com uma mensagem de exemplo de alerta. Nenhuma conta é vinculada e nenhum outro aviso é enviado.'
+                : isTelegramLinked
                 ? 'Sua conta está vinculada. Os alertas de validade chegam neste Telegram.'
                 : 'Vincule seu Telegram para receber os alertas de validade. Você será levado ao bot para confirmar a vinculação.'}
             </p>

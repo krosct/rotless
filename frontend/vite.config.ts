@@ -18,7 +18,7 @@ function appVersion(): string {
   }
   try {
     return execSync('git describe --tags --always', {
-      cwd: __dirname,
+      cwd: import.meta.dirname,
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
@@ -42,7 +42,7 @@ export default defineConfig(() => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(import.meta.dirname, './src'),
       },
     },
     // @ts-ignore
