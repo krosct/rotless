@@ -10,7 +10,19 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+it('rejects registration while sign-ups are disabled', function () {
+    $this->postJson('/api/v1/register', [
+        'name' => 'Alex',
+        'email' => 'alex@example.com',
+        'password' => 'supersecret',
+    ])->assertForbidden()->assertJson(['message' => 'Registration is temporarily disabled.']);
+
+    expect(User::where('email', 'alex@example.com')->exists())->toBeFalse();
+});
+
 it('registers a user and returns a token', function () {
+    config(['auth.registration_enabled' => true]);
+
     $response = $this->postJson('/api/v1/register', [
         'name' => 'Alex',
         'email' => 'alex@example.com',
@@ -24,6 +36,8 @@ it('registers a user and returns a token', function () {
 });
 
 it('creates a household owned by the new user on registration', function () {
+    config(['auth.registration_enabled' => true]);
+
     $this->postJson('/api/v1/register', [
         'name' => 'Alex',
         'email' => 'alex@example.com',
@@ -38,6 +52,8 @@ it('creates a household owned by the new user on registration', function () {
 });
 
 it('rejects registration with invalid data', function () {
+    config(['auth.registration_enabled' => true]);
+
     $this->postJson('/api/v1/register', [
         'name' => '',
         'email' => 'not-an-email',

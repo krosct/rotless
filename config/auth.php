@@ -114,4 +114,16 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Self Registration
+    |--------------------------------------------------------------------------
+    |
+    | New sign-ups are temporarily closed. Set REGISTRATION_ENABLED=true (and
+    | VITE_REGISTRATION_ENABLED=true for the frontend build) to reopen them.
+    |
+    */
+
+    'registration_enabled' => (bool) env('REGISTRATION_ENABLED', false),
+
 ];

@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- New sign-ups are temporarily closed: `POST /api/v1/register` answers 403
+  unless `REGISTRATION_ENABLED=true`, and the frontend (built with
+  `VITE_REGISTRATION_ENABLED`) shows a notice instead of the sign-up form.
+  The login page shows a balloon beside the shield (above it on narrow
+  screens), which is now a visible "Ver demo" button that opens the demo
+  with one click (it used to take three hidden taps).
 - The app runs on Brasília time (America/Sao_Paulo) instead of UTC: expiry
   validation, the daily expiry alerts (now at 08:00) and the reports follow the
   household's calendar. A one-off, data-preserving migration shifts the

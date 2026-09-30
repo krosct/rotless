@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Users, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { rememberInviteReturnTo } from '@/utils/inviteReturnTo';
+import { isRegistrationEnabled } from '@/config';
 
 export function AcceptInvite() {
   const { token } = useParams<{ token: string }>();
@@ -55,7 +56,11 @@ export function AcceptInvite() {
     if (!token) return;
 
     if (!isAuthenticated) {
-      toast.info('Faça login ou cadastre-se para aceitar o convite.');
+      toast.info(
+        isRegistrationEnabled()
+          ? 'Faça login ou cadastre-se para aceitar o convite.'
+          : 'Faça login para aceitar o convite.',
+      );
       navigate('/login', { state: { returnTo: `/invite/${token}` } });
       return;
     }

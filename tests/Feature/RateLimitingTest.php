@@ -88,6 +88,8 @@ it('uses the forwarded client IP only behind a trusted proxy', function () {
 });
 
 it('limits account creation per IP', function () {
+    config(['auth.registration_enabled' => true]);
+
     foreach (range(1, 10) as $i) {
         $this->postJson('/api/v1/register', [
             'name' => "User {$i}",

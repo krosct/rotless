@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouterProvider, createMemoryRouter, type InitialEntry } from 'react-router-dom';
@@ -66,6 +66,10 @@ describe('invite returnTo flow', () => {
     vi.spyOn(authApi, 'getMe').mockResolvedValue({
       user: { id: 2, name: 'Guest', email: 'guest@rotless.dev', households: [] },
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('sends an already authenticated user straight to the invite page', async () => {
@@ -144,6 +148,7 @@ describe('invite returnTo flow', () => {
   });
 
   it('returns to the invite page after registering', async () => {
+    vi.stubEnv('VITE_REGISTRATION_ENABLED', 'true');
     const user = userEvent.setup();
 
     vi.spyOn(authApi, 'register').mockImplementation(async () => {
@@ -166,6 +171,31 @@ describe('invite returnTo flow', () => {
       expect(screen.getByRole('button', { name: /Aceitar Convite/i })).toBeDefined();
     });
     expect(screen.getByText(/Você está conectado/i)).toBeDefined();
+  });
+
+  it('sends /register to the login page while sign-ups are closed, keeping the invite', async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(authApi, 'login').mockImplementation(async () => {
+      setToken('token_abc');
+      return {
+        user: { id: 2, name: 'Guest', email: 'guest@rotless.dev' },
+        token: 'token_abc',
+      };
+    });
+
+    renderRouter([{ pathname: '/register', state: { returnTo: '/invite/tok123' } }]);
+
+    expect(screen.getByTestId('login-form')).toBeDefined();
+    expect(screen.getByTestId('demo-hint')).toBeDefined();
+
+    await user.type(screen.getByLabelText(/E-mail/i), 'guest@rotless.dev');
+    await user.type(screen.getByLabelText(/Senha/i), 'password123');
+    await user.click(screen.getByRole('button', { name: /Entrar na Despensa/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Aceitar Convite/i })).toBeDefined();
+    });
   });
 
   it('remembers the invite when the user opens the auth page directly', async () => {
