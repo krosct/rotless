@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthForm } from './AuthForm';
@@ -10,6 +10,11 @@ describe('AuthForm component', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
+    vi.stubEnv('VITE_REGISTRATION_ENABLED', 'true');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   const renderWithProviders = (component: React.ReactNode) => {
@@ -172,5 +177,19 @@ describe('AuthForm component', () => {
         password: 'password123',
       });
     });
+  });
+
+  it('mostra o aviso de cadastros pausados em vez do formulário', async () => {
+    vi.stubEnv('VITE_REGISTRATION_ENABLED', 'false');
+    const user = userEvent.setup();
+    const registerSpy = vi.spyOn(authApi, 'register');
+
+    renderWithProviders(<AuthForm defaultMode="login" />);
+    await user.click(screen.getByRole('tab', { name: /Criar conta/i }));
+
+    expect(screen.getByTestId('registration-closed')).toBeDefined();
+    expect(screen.queryByTestId('register-form')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Criar Minha Despensa/i })).toBeNull();
+    expect(registerSpy).not.toHaveBeenCalled();
   });
 });

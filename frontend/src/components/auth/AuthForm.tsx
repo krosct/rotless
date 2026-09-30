@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
 import { ApiError } from '@/api/client';
-import { Mail, Lock, User, LogIn, UserPlus, AlertCircle } from 'lucide-react';
+import { Mail, Lock, User, LogIn, UserPlus, UserX, AlertCircle } from 'lucide-react';
+import { isRegistrationEnabled } from '@/config';
 import { toast } from 'sonner';
 
 // Shown when the API rate limit answers 429 (see throttle:login / throttle:register).
@@ -179,6 +180,21 @@ export function AuthForm({ defaultMode = 'login', onSuccess }: AuthFormProps) {
           </Button>
 
         </form>
+      ) : !isRegistrationEnabled() ? (
+        /* Sign-ups closed */
+        <div
+          role="status"
+          data-testid="registration-closed"
+          className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl flex items-start gap-3 text-amber-800 dark:text-amber-200"
+        >
+          <UserX className="w-5 h-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-semibold">Novos cadastros estão temporariamente pausados.</p>
+            <p className="text-xs leading-relaxed">
+              Enquanto isso, toque no escudo abaixo para explorar a demonstração. Nada é salvo.
+            </p>
+          </div>
+        </div>
       ) : (
         /* Register Form */
         <form

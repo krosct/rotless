@@ -2,6 +2,21 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Login page: the demo hint balloon floats gently above the shield. */
+@theme {
+  --animate-hint-float: hint-float 2.4s ease-in-out infinite;
+
+  @keyframes hint-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+}
+
 @layer base {
   :root {
     --primary: #2d6a4f;

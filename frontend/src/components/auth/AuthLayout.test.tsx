@@ -1,41 +1,36 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { AuthLayout } from './AuthLayout';
 
 describe('AuthLayout demo shortcut', () => {
-  afterEach(() => {
-    vi.useRealTimers();
+  it('opens the demo with a single click on the shield button', () => {
+    const onDemoClick = vi.fn();
+    render(<AuthLayout onDemoClick={onDemoClick}>form</AuthLayout>);
+
+    fireEvent.click(screen.getByRole('button', { name: /Abrir demonstração/i }));
+
+    expect(onDemoClick).toHaveBeenCalledTimes(1);
   });
 
-  it('fires after three quick taps on the shield', () => {
-    const onTripleTap = vi.fn();
-    render(<AuthLayout onShieldTripleTap={onTripleTap}>form</AuthLayout>);
-    const shield = screen.getByTestId('demo-shield');
+  it('shows the balloon only when asked and the demo is available', () => {
+    const { rerender } = render(
+      <AuthLayout onDemoClick={vi.fn()} showDemoHint>
+        form
+      </AuthLayout>
+    );
+    expect(screen.getByTestId('demo-hint')).toBeDefined();
 
-    fireEvent.click(shield);
-    fireEvent.click(shield);
-    expect(onTripleTap).not.toHaveBeenCalled();
+    rerender(<AuthLayout onDemoClick={vi.fn()}>form</AuthLayout>);
+    expect(screen.queryByTestId('demo-hint')).toBeNull();
 
-    fireEvent.click(shield);
-    expect(onTripleTap).toHaveBeenCalledTimes(1);
+    rerender(<AuthLayout showDemoHint>form</AuthLayout>);
+    expect(screen.queryByTestId('demo-hint')).toBeNull();
   });
 
-  it('ignores slow taps and taps next to the shield', () => {
-    vi.useFakeTimers();
-    const onTripleTap = vi.fn();
-    render(<AuthLayout onShieldTripleTap={onTripleTap}>form</AuthLayout>);
-    const shield = screen.getByTestId('demo-shield');
+  it('keeps the shield as plain decoration without a demo handler', () => {
+    render(<AuthLayout>form</AuthLayout>);
 
-    fireEvent.click(shield);
-    vi.advanceTimersByTime(1000);
-    fireEvent.click(shield);
-    vi.advanceTimersByTime(1000);
-    fireEvent.click(shield);
-
-    fireEvent.click(screen.getByText('Zero Desperdício'));
-    fireEvent.click(screen.getByText('Zero Desperdício'));
-    fireEvent.click(screen.getByText('Zero Desperdício'));
-
-    expect(onTripleTap).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('demo-shield')).toBeNull();
+    expect(screen.getByText('Zero Desperdício')).toBeDefined();
   });
 });
