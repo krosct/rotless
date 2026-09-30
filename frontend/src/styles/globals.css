@@ -2,9 +2,21 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Login page: the demo hint balloon floats gently above the shield. */
+/* Login page: the demo hint balloon floats gently above the shield (narrow
+   screens) or nudges towards it from the right (wide screens). */
 @theme {
   --animate-hint-float: hint-float 2.4s ease-in-out infinite;
+  --animate-hint-nudge: hint-nudge 2.4s ease-in-out infinite;
+
+  @keyframes hint-nudge {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(-5px);
+    }
+  }
 
   @keyframes hint-float {
     0%,

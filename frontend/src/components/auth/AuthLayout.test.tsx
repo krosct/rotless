@@ -18,10 +18,13 @@ describe('AuthLayout demo shortcut', () => {
         form
       </AuthLayout>
     );
+    // Above the shield on narrow screens, beside it on wide ones (CSS picks one).
     expect(screen.getByTestId('demo-hint')).toBeDefined();
+    expect(screen.getByTestId('demo-hint-side')).toBeDefined();
 
     rerender(<AuthLayout onDemoClick={vi.fn()}>form</AuthLayout>);
     expect(screen.queryByTestId('demo-hint')).toBeNull();
+    expect(screen.queryByTestId('demo-hint-side')).toBeNull();
 
     rerender(<AuthLayout showDemoHint>form</AuthLayout>);
     expect(screen.queryByTestId('demo-hint')).toBeNull();
