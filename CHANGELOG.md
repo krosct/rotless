@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Installable PWA: web app manifest, icons (including maskable) and a
+  service worker that precaches only the app shell, so the app can be
+  installed on Android from Chrome ("Instalar app") and opens standalone.
+  `/api/*` is never cached. Caddy serves the PWA entry points with
+  `Cache-Control: no-cache` so installed apps pick up new deploys.
 - Every operation is stored in `household_movements`: batches added,
   edited, consumed or discarded (partially or fully) and deleted, product
   edits, household renames, invitations, members joining, leaving and
