@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import {execSync} from 'child_process';
 import path from 'path';
 import {defineConfig} from 'vite';
+import {VitePWA} from 'vite-plugin-pwa';
 
 // Where the Laravel API runs during local development. The browser always calls
 // the API on its own origin (/api/*); Vite proxies that prefix to this target so
@@ -36,7 +37,41 @@ export default defineConfig(() => {
     : undefined;
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // Installable PWA: the service worker precaches only the app shell
+      // (HTML/JS/CSS/icons). /api/* always goes to the network, so batches and
+      // expiry dates are never served stale from a cache.
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['rotless_logo_32.png', 'apple-touch-icon-180x180.png'],
+        manifest: {
+          name: 'rotless — Despensa Inteligente',
+          short_name: 'rotless',
+          description:
+            'App de despensa inteligente que rastreia lotes de alimentos, datas de validade e avisa antes de vencer.',
+          lang: 'pt-BR',
+          start_url: '/',
+          scope: '/',
+          display: 'standalone',
+          orientation: 'portrait',
+          theme_color: '#2d6a4f',
+          background_color: '#ffffff',
+          icons: [
+            {src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png'},
+            {src: 'rotless_logo_512.png', sizes: '512x512', type: 'image/png'},
+            {src: 'pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable'},
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//],
+          cleanupOutdatedCaches: true,
+        },
+      }),
+    ],
     define: {
       __APP_VERSION__: JSON.stringify(appVersion()),
     },

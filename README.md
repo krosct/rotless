@@ -36,6 +36,14 @@ server. When you stop it (Ctrl+C), it stops the stack again — but only if it w
 the one that started it; a stack that was already running is left untouched.
 Requires Docker and `docker-compose.yml` one level above `frontend/`.
 
+## Install on Android (PWA)
+
+The frontend is an installable PWA (`vite-plugin-pwa`). Open the production
+URL in Chrome on Android and tap **⋮ → Instalar app** (or the install banner).
+It gets a home-screen icon and opens standalone, without the browser UI. The
+service worker caches only the app shell; API calls always hit the network.
+The service worker is generated only by `npm run build`, not by `npm run dev`.
+
 ## Deploy
 
 Pushes to `main` that pass CI are deployed to the VPS by
