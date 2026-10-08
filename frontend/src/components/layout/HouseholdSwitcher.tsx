@@ -39,15 +39,15 @@ export function HouseholdSwitcher() {
   };
 
   return (
-    <div ref={containerRef} className="relative hidden sm:block">
+    <div ref={containerRef} className="relative min-w-0">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className="group flex items-center gap-2 pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl"
+        className="group flex items-center gap-1.5 sm:gap-2 pl-2 sm:pl-3 border-l border-stone-200 dark:border-stone-800 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl"
       >
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-stone-700 truncate max-w-[200px] transition-all duration-150 group-hover:bg-stone-200 dark:group-hover:bg-stone-700 group-hover:border-stone-300 dark:group-hover:border-stone-600 group-hover:shadow-xs">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 border border-stone-200 dark:border-stone-700 truncate min-w-0 max-w-[110px] sm:max-w-[200px] transition-all duration-150 group-hover:bg-stone-200 dark:group-hover:bg-stone-700 group-hover:border-stone-300 dark:group-hover:border-stone-600 group-hover:shadow-xs">
           {currentHousehold.name}
         </span>
         <ChevronDown
@@ -60,7 +60,7 @@ export function HouseholdSwitcher() {
       {isOpen && (
         <div
           role="listbox"
-          className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl shadow-xl overflow-hidden z-40"
+          className="absolute left-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl shadow-xl overflow-hidden z-40"
         >
           {households.map((household) => {
             const own = isOwn(household);

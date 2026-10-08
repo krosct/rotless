@@ -18,7 +18,7 @@ import { ProductEditModal } from '@/components/batches/ProductEditModal';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ProductGroup, groupBatchesByProduct } from '@/utils/groupBatches';
-import { Bell, AlertTriangle, Sparkles } from 'lucide-react';
+import { Bell, AlertTriangle, Sparkles, Plus } from 'lucide-react';
 import { expiryTone } from '@/utils/expiry';
 
 export function Dashboard() {
@@ -150,7 +150,7 @@ export function Dashboard() {
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950 transition-colors">
       <Header onOpenNewBatchModal={handleOpenNewModal} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-24 md:pb-8">
         {/* Top welcome & alert banner */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -201,6 +201,17 @@ export function Dashboard() {
           onDeleteBatch={handleDeleteBatch}
         />
       </main>
+
+      {/* Floating Add Batch Button on Mobile (desktop uses the header button) */}
+      <button
+        type="button"
+        onClick={handleOpenNewModal}
+        aria-label="Adicionar lote"
+        title="Adicionar lote"
+        className="md:hidden fixed bottom-6 right-4 z-30 w-14 h-14 rounded-full bg-[#2d6a4f] hover:bg-[#245a42] active:scale-95 text-white shadow-lg shadow-stone-900/20 flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#2d6a4f] dark:focus-visible:ring-offset-stone-950"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
 
       {/* Create Batch Modal */}
       <Modal
