@@ -116,6 +116,50 @@ it('rejects an unknown barcode', function () {
     ])->assertStatus(422)->assertJsonPath('message', 'Product not found for this barcode.');
 });
 
+it('retries the openfoodfacts lookup on rate limit before succeeding', function () {
+    [$user] = memberHousehold();
+    config()->set('services.openfoodfacts.retry_delay', 0);
+
+    Http::fake([
+        'world.openfoodfacts.org/*' => Http::sequence()
+            ->push('Too Many Requests', 429)
+            ->push('Too Many Requests', 429)
+            ->push([
+                'status' => 1,
+                'product' => ['product_name' => 'Leite Betânia', 'brands' => 'Betânia'],
+            ], 200),
+    ]);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson('/api/v1/openfoodfacts/7898403782387')
+        ->assertOk()
+        ->assertJsonPath('name', 'Leite Betânia');
+
+    Http::assertSentCount(3);
+});
+
+it('reports the barcode lookup as unavailable after retries are exhausted', function () {
+    [$user, $household] = memberHousehold();
+    config()->set('services.openfoodfacts.retry_delay', 0);
+
+    Http::fake([
+        'world.openfoodfacts.org/*' => Http::response('Too Many Requests', 429),
+    ]);
+
+    $this->actingAs($user, 'sanctum')
+        ->getJson('/api/v1/openfoodfacts/7898403782387')
+        ->assertStatus(503);
+
+    $this->actingAs($user, 'sanctum')->postJson('/api/v1/batches', [
+        'household_id' => $household->id,
+        'barcode' => '7898403782387',
+        'expires_at' => now()->addDays(30)->toDateString(),
+    ])->assertStatus(503);
+
+    Http::assertSentCount(6);
+    expect(Product::where('barcode', '7898403782387')->exists())->toBeFalse();
+});
+
 it('creates a manual product with photo upload', function () {
     [$user, $household] = memberHousehold();
     Storage::fake('public');
