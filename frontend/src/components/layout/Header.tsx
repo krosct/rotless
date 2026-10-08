@@ -27,9 +27,9 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-b border-stone-200/80 dark:border-stone-800 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand & Household */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link
             to="/dashboard"
             className="flex items-center gap-2 group shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2d6a4f] rounded-xl p-1"
@@ -39,7 +39,7 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
               alt=""
               className="w-9 h-9 object-contain group-hover:scale-105 transition-transform"
             />
-            <span className="font-bold text-xl tracking-tight text-stone-900 dark:text-white">
+            <span className="hidden sm:inline font-bold text-xl tracking-tight text-stone-900 dark:text-white">
               rot<span className="text-[#2d6a4f] dark:text-emerald-400">less</span>
             </span>
           </Link>
@@ -48,7 +48,7 @@ export function Header({ onOpenNewBatchModal }: HeaderProps) {
         </div>
 
         {/* Right navigation actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
           {/* Quick Add Batch Button on Desktop Header */}
           {onOpenNewBatchModal && (
             <Button
