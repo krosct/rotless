@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On mobile, the add batch button (now a floating button) and the
+  household switcher (now compact) are visible again.
 - Reports no longer drop the first hours of the previous comparison period.
 - The new batch form no longer offers tomorrow as "today" in the evening.
 - The back buttons of the household history return to the household
