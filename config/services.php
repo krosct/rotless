@@ -31,6 +31,9 @@ return [
     'openfoodfacts' => [
         'base_url' => env('OPENFOODFACTS_BASE_URL', 'https://world.openfoodfacts.org'),
         'timeout' => env('OPENFOODFACTS_TIMEOUT', 10),
+        'attempts' => env('OPENFOODFACTS_ATTEMPTS', 3),
+        'retry_delay' => env('OPENFOODFACTS_RETRY_DELAY', 500),
+        'user_agent' => env('OPENFOODFACTS_USER_AGENT', 'Rotless/1.0 (+https://github.com/krosct/rotless)'),
     ],
 
     'telegram' => [

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\BatchStatus;
 use App\Enums\MovementAction;
+use App\Exceptions\OpenFoodFactsUnavailableException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConsumeBatchRequest;
 use App\Http\Requests\StoreBatchRequest;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\Storage;
 final class BatchController extends Controller
 {
     use AuthorizesRequests;
+
+    private const UNAVAILABLE_MESSAGE = 'Barcode lookup service is temporarily unavailable. Please try again.';
 
     public function index(Request $request): JsonResponse
     {
@@ -48,7 +51,11 @@ final class BatchController extends Controller
         $household = Household::findOrFail($request->integer('household_id'));
         $this->authorize('view', $household);
 
-        $product = $this->resolveProduct($request);
+        try {
+            $product = $this->resolveProduct($request);
+        } catch (OpenFoodFactsUnavailableException) {
+            return response()->json(['message' => self::UNAVAILABLE_MESSAGE], 503);
+        }
 
         if ($product === null) {
             return response()->json(['message' => 'Product not found for this barcode.'], 422);
@@ -199,7 +206,11 @@ final class BatchController extends Controller
 
     public function lookupBarcode(Request $request, string $barcode): JsonResponse
     {
-        $data = OpenFoodFactsClient::fromConfig()->findByBarcode($barcode);
+        try {
+            $data = OpenFoodFactsClient::fromConfig()->findByBarcode($barcode);
+        } catch (OpenFoodFactsUnavailableException) {
+            return response()->json(['message' => self::UNAVAILABLE_MESSAGE], 503);
+        }
 
         if ($data === null) {
             return response()->json([

@@ -10,6 +10,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { BarcodeScanner } from '@/components/scanner/BarcodeScanner';
 import { getTodayISODate } from '@/utils/format';
 import { lookupBarcode } from '@/api/batches';
+import { ApiError } from '@/api/client';
 import {
   Camera,
   Barcode as BarcodeIcon,
@@ -203,6 +204,8 @@ export function BatchForm({
             message: msgs[0],
           });
         });
+      } else if (err instanceof ApiError) {
+        toast.error(err.message);
       }
     }
   };
