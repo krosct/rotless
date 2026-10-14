@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Deploys go through devkit (`deploy.conf`), like the other apps on the VPS,
+  which all sit behind one shared Caddy: rotless no longer owns port 443 nor
+  has its own deploy script. Each release has its image
+  (`rotless-app:<release>`), whose code it runs; `.env` and Laravel's storage
+  live outside the releases, in `/srv/rotless`.
+
 ### Added
 
 - Installable PWA: web app manifest, icons (including maskable) and a
