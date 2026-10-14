@@ -1,0 +1,19 @@
+# Production override (scripts/devkit-common.sh adds it). The code is the one inside the image
+# rotless-app:<release>, not the folder bind-mounted for development: no vendor/ volume to fill on
+# every deploy, so switching releases is only stopping the old containers and starting the new.
+# Only the server's .env and Laravel's storage come from outside.
+services:
+  app:
+    volumes: !override
+      - ${ROTLESS_ENV_FILE}:/var/www/html/.env:ro
+      - ${ROTLESS_STORAGE}:/var/www/html/storage
+
+  queue:
+    volumes: !override
+      - ${ROTLESS_ENV_FILE}:/var/www/html/.env:ro
+      - ${ROTLESS_STORAGE}:/var/www/html/storage
+
+  scheduler:
+    volumes: !override
+      - ${ROTLESS_ENV_FILE}:/var/www/html/.env:ro
+      - ${ROTLESS_STORAGE}:/var/www/html/storage

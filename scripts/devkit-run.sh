@@ -13,9 +13,9 @@ set -euo pipefail
 [[ -n "${ROTLESS_HTTP_PORT:-}" ]] || die "ROTLESS_HTTP_PORT is not set (SERVICE_ENV in deploy.conf)."
 compose_with "$ROOT/.env"
 
-# --renew-anon-volumes: vendor/ comes from the new image, with its Composer dependencies. It also
-# recreates every service it is given, so the database (started by devkit-install.sh) is left out.
-"${DC[@]}" up -d --no-build --renew-anon-volumes --remove-orphans app queue scheduler caddy
+# Only what changed is recreated (a new release: app, queue and scheduler, on the new image); the
+# database keeps running. Fast enough for devkit's health check, which follows.
+"${DC[@]}" up -d --no-build --remove-orphans
 "${DC[@]}" exec -T app chmod -R ug+rwX storage bootstrap/cache
 
 exec "${DC[@]}" logs -f --since 1m

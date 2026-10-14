@@ -22,5 +22,5 @@ compose_with() {
   export ROTLESS_ENV_FILE="$1"
   # shellcheck disable=SC2034 # used by the scripts that source this file
   DC=(docker compose -p rotless --profile caddy --project-directory "$RELEASE_DIR"
-    -f "$RELEASE_DIR/docker-compose.yml" --env-file "$1")
+    -f "$RELEASE_DIR/docker-compose.yml" -f "$RELEASE_DIR/docker-compose.prod.yml" --env-file "$1")
 }
