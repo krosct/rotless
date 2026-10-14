@@ -54,11 +54,12 @@ Pushes to `main` that pass CI are deployed by `.github/workflows/deploy.yml`, **
 approval** of the `production` environment in GitHub Actions. devkit builds the frontend on the
 runner, sends the release over SSH and, on the VPS, in `/srv/rotless`:
 
-1. unpacks it into `releases/<release>` and runs `scripts/devkit-install.sh` while the running
+1. unpacks it into `releases/<release>` and runs `INSTALL` (`deploy.conf`) while the running
    release keeps serving: builds the image `rotless-app:<release>`, dumps the database into
    `data/backups/` (newest 10 kept) and runs pending migrations (additive only);
-2. switches the user service `rotless` to the new release: `scripts/devkit-run.sh` recreates
-   `app`, `queue`, `scheduler` and `caddy` on the new image (the database keeps running);
+2. switches the user service `rotless` to the new release: `RUN` recreates `app`, `queue`,
+   `scheduler` and `caddy` on the new image, whose code they run (`docker-compose.prod.yml`;
+   the database keeps running);
 3. checks that it stays up and answers `GET /api/v1/health`, or goes back to the previous
    release (migrations are never rolled back);
 4. publishes `rotless.caddy` on the shared Caddy (`/srv/caddy/sites/`, HTTPS with the

@@ -1,4 +1,4 @@
-# Production override (scripts/devkit-common.sh adds it). The code is the one inside the image
+# Production override (added by the INSTALL and RUN commands of deploy.conf). The code is the one inside the image
 # rotless-app:<release>, not the folder bind-mounted for development: no vendor/ volume to fill on
 # every deploy, so switching releases is only stopping the old containers and starting the new.
 # Only the server's .env and Laravel's storage come from outside.

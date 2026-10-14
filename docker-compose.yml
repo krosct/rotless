@@ -1,4 +1,4 @@
-# Production runs this file through devkit (deploy.conf, scripts/devkit-*.sh), which sets:
+# Production runs this file through devkit (the INSTALL and RUN commands of deploy.conf), which sets:
 #   ROTLESS_TAG        the release; app, queue and scheduler share the image rotless-app:<release>
 #   ROTLESS_ENV_FILE   the server's .env, kept outside the releases
 #   ROTLESS_STORAGE    Laravel's storage/, kept outside the releases
