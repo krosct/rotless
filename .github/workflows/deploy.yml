@@ -1,15 +1,14 @@
 name: Deploy
 
-# Deploys main to the VPS after CI passes on it. The job uses the "production"
-# environment, which requires a manual approval (Settings > Environments), so
-# nothing reaches the VPS without an explicit confirmation.
+# Deploys main to the VPS after CI passes on it, with devkit (krosct/devkit, pinned version) from
+# deploy.conf: it builds the frontend here, sends the release over SSH, runs it next to the other
+# apps of the VPS behind their shared Caddy, rolls back if it does not stay up and checks the
+# public address. The job uses the "production" environment, which requires a manual approval
+# (Settings > Environments), so nothing reaches the VPS without an explicit confirmation.
 #
-# The runner builds the frontend and streams it to scripts/deploy.sh over SSH;
-# the VPS (1 GB e2-micro) only builds the PHP images. The SSH key is locked to
-# that script on the VPS (forced command in ~/.ssh/authorized_keys).
-#
-# This repository is public, and so are its Actions logs: the VPS address and
-# user are secrets so they stay masked, and deploy.sh prints no secrets.
+# The app settings are the server's .env (/srv/rotless/.env); this workflow sends none.
+# This repository is public, and so are its Actions logs: the VPS address and user are secrets
+# so they stay masked.
 on:
     workflow_run:
         workflows: [CI]
@@ -45,6 +44,7 @@ jobs:
                   fetch-depth: 0
                   persist-credentials: false
 
+            # BUILD (deploy.conf) runs here: the VPS needs no Node.
             - name: Setup Node
               uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
               with:
@@ -52,51 +52,11 @@ jobs:
                   cache: npm
                   cache-dependency-path: frontend/package-lock.json
 
-            - name: Build the frontend
-              working-directory: frontend
-              run: |
-                  npm ci
-                  npm run build
-
-            - name: Configure SSH
-              env:
-                  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-                  DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-              run: |
-                  for name in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_HOST DEPLOY_USER; do
-                    if [ -z "${!name}" ]; then
-                      echo "::error::Secret ${name} is not set in the production environment."
-                      exit 1
-                    fi
-                  done
-                  install -d -m 700 ~/.ssh
-                  printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-                  chmod 600 ~/.ssh/deploy_key
-                  # The VPS host key, pinned: never trust whatever answers.
-                  printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-
             - name: Deploy
-              env:
-                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-                  DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-                  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-              # ServerAlive: a VPS that stops answering ends the session after
-              # ~10 minutes; the deploy itself keeps running there (see deploy.sh).
-              run: |
-                  tar -C frontend/dist -czf - . \
-                    | ssh -i ~/.ssh/deploy_key \
-                        -o IdentitiesOnly=yes \
-                        -o StrictHostKeyChecking=yes \
-                        -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-                        -o ConnectTimeout=20 \
-                        -o ServerAliveInterval=30 \
-                        -o ServerAliveCountMax=20 \
-                        -p "$DEPLOY_PORT" \
-                        "${DEPLOY_USER}@${DEPLOY_HOST}" "$DEPLOY_SHA"
-
-            - name: Remove the SSH key
-              if: always()
-              run: rm -f ~/.ssh/deploy_key
+              uses: krosct/devkit@v1.1.0
+              with:
+                  host: ${{ secrets.DEPLOY_HOST }}
+                  user: ${{ secrets.DEPLOY_USER }}
+                  port: ${{ vars.DEPLOY_PORT || '22' }}
+                  ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
+                  known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}

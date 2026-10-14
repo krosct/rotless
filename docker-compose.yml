@@ -1,5 +1,12 @@
+# Production runs this file through devkit (deploy.conf, scripts/devkit-*.sh), which sets:
+#   ROTLESS_TAG        the release; app, queue and scheduler share the image rotless-app:<release>
+#   ROTLESS_ENV_FILE   the server's .env, kept outside the releases
+#   ROTLESS_STORAGE    Laravel's storage/, kept outside the releases
+#   ROTLESS_HTTP_PORT  the port devkit chose for rotless (the shared Caddy forwards to it)
+# Without them (development), the image is rotless-app:dev and ./.env, ./storage are used.
 services:
   app:
+    image: rotless-app:${ROTLESS_TAG:-dev}
     build:
       context: .
       network: host
@@ -17,6 +24,8 @@ services:
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
+      - ${ROTLESS_ENV_FILE:-./.env}:/var/www/html/.env:ro
+      - ${ROTLESS_STORAGE:-./storage}:/var/www/html/storage
     depends_on:
       db:
         condition: service_healthy
@@ -54,6 +63,7 @@ services:
       retries: 10
 
   queue:
+    image: rotless-app:${ROTLESS_TAG:-dev}
     build:
       context: .
       network: host
@@ -65,11 +75,14 @@ services:
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
+      - ${ROTLESS_ENV_FILE:-./.env}:/var/www/html/.env:ro
+      - ${ROTLESS_STORAGE:-./storage}:/var/www/html/storage
     depends_on:
       db:
         condition: service_healthy
 
   scheduler:
+    image: rotless-app:${ROTLESS_TAG:-dev}
     build:
       context: .
       network: host
@@ -81,11 +94,15 @@ services:
     volumes:
       - .:/var/www/html
       - /var/www/html/vendor
+      - ${ROTLESS_ENV_FILE:-./.env}:/var/www/html/.env:ro
+      - ${ROTLESS_STORAGE:-./storage}:/var/www/html/storage
     depends_on:
       db:
         condition: service_healthy
 
-  # HTTPS reverse proxy: serves the SPA and forwards /api/* to Laravel.
+  # Internal web server: serves the SPA and forwards /api/* to Laravel, on
+  # 127.0.0.1 only. The VPS's shared Caddy (HTTPS on 80/443 for every app
+  # there) forwards rotless's domain here; see the Caddyfile header.
   # Only runs when the "caddy" profile is enabled (production):
   #   docker compose --profile caddy up -d
   caddy:
@@ -94,16 +111,11 @@ services:
     restart: unless-stopped
     depends_on:
       - app
-    environment:
-      APP_URL: ${APP_URL:-}
-    # HTTPS only: Cloudflare connects to the origin on 443.
     ports:
-      - "443:443"
+      - "127.0.0.1:${ROTLESS_HTTP_PORT:-8081}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend/dist:/srv:ro
-      # Cloudflare Origin Certificate (origin.pem + origin.key), only on the server.
-      - ./certs:/etc/caddy/certs:ro
       - caddy-data:/data
       - caddy-config:/config
 

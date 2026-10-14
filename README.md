@@ -46,96 +46,51 @@ The service worker is generated only by `npm run build`, not by `npm run dev`.
 
 ## Deploy
 
-Pushes to `main` that pass CI are deployed to the VPS by
-`.github/workflows/deploy.yml`, **after a manual approval** of the
-`production` environment in GitHub Actions. The job builds the frontend on the
-runner and streams it over SSH to `scripts/deploy.sh`, which on the VPS:
+rotless is published with [devkit](https://github.com/krosct/devkit), like the other apps on
+its VPS, which all sit behind one shared Caddy. `deploy.conf` holds what is specific to rotless;
+devkit does the rest.
 
-1. builds the PHP images in a separate git worktree, one service at a time
-   (the 1 GB e2-micro cannot build them in parallel), while the site keeps
-   running;
-2. dumps the database to `~/rotless-backups/` (newest 10 kept);
-3. checks out the commit, runs pending migrations (additive only), recreates
-   the containers, publishes the frontend and restarts `queue`/`scheduler`;
-4. checks `GET /api/v1/health`, and on failure puts back the previous commit,
-   images and frontend (migrations are never rolled back).
+Pushes to `main` that pass CI are deployed by `.github/workflows/deploy.yml`, **after a manual
+approval** of the `production` environment in GitHub Actions. devkit builds the frontend on the
+runner, sends the release over SSH and, on the VPS, in `/srv/rotless`:
 
-It runs detached from the SSH session and logs to `~/.rotless-deploy/logs/`.
-The first install of the stack on the VPS (Docker, `.env`, origin
-certificate) is done beforehand. After the setup below, update the code only
-through deploys: files copied over the checkout by hand (e.g. with rsync) make
-it dirty, and the next deploy refuses to run.
+1. unpacks it into `releases/<release>` and runs `scripts/devkit-install.sh` while the running
+   release keeps serving: builds the image `rotless-app:<release>`, dumps the database into
+   `data/backups/` (newest 10 kept) and runs pending migrations (additive only);
+2. switches the user service `rotless` to the new release: `scripts/devkit-run.sh` recreates
+   `app`, `queue`, `scheduler` and `caddy` on the new image (the database keeps running);
+3. checks that it stays up and answers `GET /api/v1/health`, or goes back to the previous
+   release (migrations are never rolled back);
+4. publishes `rotless.caddy` on the shared Caddy (`/srv/caddy/sites/`, HTTPS with the
+   Cloudflare Origin Certificate in `/srv/caddy/certs/`), which forwards to the `caddy`
+   container on the port devkit chose, and checks the public address.
 
-### One-time setup
+What stays on the VPS across releases: `/srv/rotless/.env` (the settings; the workflow sends
+none), `/srv/rotless/data/storage` (Laravel's storage), `data/backups` and the database volume
+`rotless_db-data` (the Compose project is always `rotless`). On a VPS without the shared Caddy,
+the first deploy installs it (passwordless sudo, or run it from a terminal).
 
-Order: merge this workflow into `main` first. Its first run waits for
-approval; do the steps below, then approve it.
+### Secrets of the `production` environment
 
-**1. GitHub environment** (only you can approve, only `main` deploys):
-
-```bash
-gh api -X PUT repos/krosct/rotless/environments/production --input - <<JSON
-{"reviewers":[{"type":"User","id":$(gh api user --jq .id)}],
- "deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
-JSON
-gh api -X POST repos/krosct/rotless/environments/production/deployment-branch-policies \
-  -f name=main -f type=branch
-```
-
-**2. Deploy key**, locked to `scripts/deploy.sh` on the VPS (`restrict` +
-`command=`: no shell, no forwarding; the key can only deploy the tip of
-`main`):
+`DEPLOY_HOST` (the VPS IP, a secret so it stays masked in the public Actions logs),
+`DEPLOY_USER`, `DEPLOY_SSH_KEY` (a key with a shell on the VPS: devkit runs its own steps there)
+and `DEPLOY_KNOWN_HOSTS`:
 
 ```bash
-ssh-keygen -t ed25519 -N '' -C rotless-github-deploy -f ~/.secrets/rotless-deploy
-PUB=$(cat ~/.secrets/rotless-deploy.pub)
-ssh rotless-vps "printf 'restrict,command=\"%s/rotless/scripts/deploy.sh\" %s\n' \"\$HOME\" '$PUB' >> ~/.ssh/authorized_keys"
-```
-
-**3. Secrets** of the `production` environment. `DEPLOY_HOST` is the VPS IP,
-not the Cloudflare domain; keeping it a secret keeps the origin IP masked in
-the public Actions logs. The host key is read over your already trusted SSH
-connection:
-
-```bash
-gh secret set DEPLOY_SSH_KEY --env production < ~/.secrets/rotless-deploy
-gh secret set DEPLOY_HOST --env production   # prompts: VPS public IP
-gh secret set DEPLOY_USER --env production   # prompts: SSH user on the VPS
 ssh rotless-vps 'cat /etc/ssh/ssh_host_ed25519_key.pub' \
   | awk -v h="<VPS IP>" '{print h, $1, $2}' \
   | gh secret set DEPLOY_KNOWN_HOSTS --env production
-shred -u ~/.secrets/rotless-deploy   # the private key now lives only in GitHub
 ```
 
-A non-default SSH port goes in the `DEPLOY_PORT` environment variable (and the
-known_hosts line becomes `[<VPS IP>]:<port> ...`). GitHub runners use changing
-IPs, so the cloud firewall must allow SSH from anywhere; keep password login
-disabled.
+A non-default SSH port goes in the `DEPLOY_PORT` environment variable.
 
-**4. Turn the VPS copy into a git checkout** (it came from rsync, without
-`.git`). Needs `git` on the VPS. Tracked files take the version on `main`;
-`.env`, `certs/`, `frontend/dist` and the database are untouched:
+### Manual deploy and helpers
 
 ```bash
-ssh rotless-vps
-cd ~/rotless
-git init -q -b main
-git remote add origin https://github.com/krosct/rotless.git
-git fetch origin main
-git reset --hard origin/main
-git status --short   # leftovers from rsync show as ?? — review them
+~/Documentos/devkit/deploy.sh vps rotless-vps            # same deploy, from this folder
+~/Documentos/devkit/deploy.sh status|logs|restart rotless-vps
 ```
 
-Keep the directory named `rotless`: Docker Compose derives the database
-volume name (`rotless_db-data`) from it, and `deploy.sh` refuses to run if
-that volume is missing.
-
-### Manual deploy and rollback
-
-```bash
-# -n: no stdin, otherwise deploy.sh waits for a frontend tarball on it
-ssh -n rotless-vps 'cd ~/rotless && git fetch -q origin main && ./scripts/deploy.sh $(git rev-parse origin/main)'
-```
-
-Without the tarball the frontend is built on the VPS (slow). To undo a
-release, `git revert` it on `main` and let it deploy.
+Stopping the service only stops following the logs; the containers keep running. To stop
+rotless: `ssh rotless-vps 'docker compose -p rotless stop'`. To undo a release, `git revert` it
+on `main` and let it deploy. Never run `docker compose down -v`: it deletes the database volume.
