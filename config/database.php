@@ -9,8 +9,8 @@ return [
     | Default Database Connection Name
     |--------------------------------------------------------------------------
     |
-    | The application runs on PostgreSQL only (local Docker stack, CI and the
-    | VPS). SQLite exists solely for the Pest suite, which forces an in-memory
+    | The application runs on PostgreSQL only (in Docker locally and on the
+    | VPS, a service container in CI). SQLite exists solely for the Pest suite, which forces an in-memory
     | database (see tests/Pest.php and tests/TestCase.php).
     |
     */

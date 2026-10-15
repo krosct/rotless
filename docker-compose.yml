@@ -1,35 +1,11 @@
-# Production runs this file through devkit (the INSTALL and RUN commands of deploy.conf), which sets:
-#   ROTLESS_TAG        the release; app, queue and scheduler share the image rotless-app:<release>
-#   ROTLESS_ENV_FILE   the server's .env, kept outside the releases
-#   ROTLESS_STORAGE    Laravel's storage/, kept outside the releases
-#   ROTLESS_HTTP_PORT  the port devkit chose for rotless (the shared Caddy forwards to it)
-# Without them (development), the image is rotless-app:dev and ./.env, ./storage are used.
-services:
-  app:
-    image: rotless-app:${ROTLESS_TAG:-dev}
-    build:
-      context: .
-      network: host
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8000:8000"
-    # The FrankenPHP image checks its admin API, which docker/frankenphp/Caddyfile
-    # turns off; probe Laravel's /up route instead (no DB, not exposed by Caddy).
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8000/up"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    volumes:
-      - .:/var/www/html
-      - /var/www/html/vendor
-      - ${ROTLESS_ENV_FILE:-./.env}:/var/www/html/.env:ro
-      - ${ROTLESS_STORAGE:-./storage}:/var/www/html/storage
-    depends_on:
-      db:
-        condition: service_healthy
+# Only PostgreSQL runs in Docker; the app runs on the system (deploy.conf). The project is always
+# "rotless", locally and on the VPS, so the database volume is always rotless_db-data.
+#   docker compose up -d --wait db
+# It reads DB_DATABASE, DB_USERNAME and DB_PASSWORD from the environment: the server's .env on the
+# VPS (devkit), the project's .env locally.
+name: rotless
 
+services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -62,64 +38,5 @@ services:
       timeout: 5s
       retries: 10
 
-  queue:
-    image: rotless-app:${ROTLESS_TAG:-dev}
-    build:
-      context: .
-      network: host
-    restart: unless-stopped
-    command: ["php", "artisan", "queue:work"]
-    # Runs an artisan command, not the web server: no HTTP health check.
-    healthcheck:
-      disable: true
-    volumes:
-      - .:/var/www/html
-      - /var/www/html/vendor
-      - ${ROTLESS_ENV_FILE:-./.env}:/var/www/html/.env:ro
-      - ${ROTLESS_STORAGE:-./storage}:/var/www/html/storage
-    depends_on:
-      db:
-        condition: service_healthy
-
-  scheduler:
-    image: rotless-app:${ROTLESS_TAG:-dev}
-    build:
-      context: .
-      network: host
-    restart: unless-stopped
-    command: ["php", "artisan", "schedule:work"]
-    # Runs an artisan command, not the web server: no HTTP health check.
-    healthcheck:
-      disable: true
-    volumes:
-      - .:/var/www/html
-      - /var/www/html/vendor
-      - ${ROTLESS_ENV_FILE:-./.env}:/var/www/html/.env:ro
-      - ${ROTLESS_STORAGE:-./storage}:/var/www/html/storage
-    depends_on:
-      db:
-        condition: service_healthy
-
-  # Internal web server: serves the SPA and forwards /api/* to Laravel, on
-  # 127.0.0.1 only. The VPS's shared Caddy (HTTPS on 80/443 for every app
-  # there) forwards rotless's domain here; see the Caddyfile header.
-  # Only runs when the "caddy" profile is enabled (production):
-  #   docker compose --profile caddy up -d
-  caddy:
-    image: caddy:2-alpine
-    profiles: ["caddy"]
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - "127.0.0.1:${ROTLESS_HTTP_PORT:-8081}:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./frontend/dist:/srv:ro
-      - caddy-data:/data
-      - caddy-config:/config
-
 volumes:
   db-data:
-  caddy-data:
-  caddy-config:

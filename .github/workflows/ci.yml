@@ -76,9 +76,8 @@ jobs:
               run: |
                   cp .env.example .env
                   php artisan key:generate
-                  # .env.example already targets Postgres; the service container
-                  # listens on localhost instead of the compose host "db".
-                  sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+                  # .env.example already targets Postgres on 127.0.0.1, where the
+                  # service container listens.
                   sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=ci-only-password/' .env
 
             - name: Run migrations against Postgres

@@ -26,9 +26,9 @@ Keep this template and fill every section. Write "N/A" when a section does not a
 
 <!-- Exact commands run and the observed result. -->
 
-- [ ] `docker compose exec app vendor/bin/pint --test`
-- [ ] `docker compose exec app vendor/bin/phpstan analyse`
-- [ ] `docker compose exec app vendor/bin/pest`
+- [ ] `vendor/bin/pint --test`
+- [ ] `vendor/bin/phpstan analyse`
+- [ ] `vendor/bin/pest`
 - [ ] `cd frontend && npm run lint && npm run test && npm run build`
 
 ## Database impact

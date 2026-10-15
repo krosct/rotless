@@ -66,13 +66,13 @@ it('treats the email case-insensitively when counting attempts', function () {
 });
 
 it('uses the forwarded client IP only behind a trusted proxy', function () {
-    // Behind Caddy (private network): each forwarded client gets its own limit.
+    // Behind the shared Caddy (loopback): each forwarded client gets its own limit.
     foreach (range(1, 5) as $attempt) {
-        $this->withServerVariables(['REMOTE_ADDR' => '172.18.0.5', 'HTTP_X_FORWARDED_FOR' => '198.51.100.1'])
+        $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1', 'HTTP_X_FORWARDED_FOR' => '198.51.100.1'])
             ->postJson('/api/v1/login', loginPayload());
     }
 
-    $this->withServerVariables(['REMOTE_ADDR' => '172.18.0.5', 'HTTP_X_FORWARDED_FOR' => '198.51.100.2'])
+    $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1', 'HTTP_X_FORWARDED_FOR' => '198.51.100.2'])
         ->postJson('/api/v1/login', loginPayload())
         ->assertStatus(422);
 
