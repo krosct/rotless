@@ -28,7 +28,9 @@
 	}
 }
 
-http://127.0.0.1:{$ROTLESS_HTTP_PORT:8000} {
+# Any Host (the shared Caddy sends the public domain), only on 127.0.0.1.
+http://:{$ROTLESS_HTTP_PORT:8000} {
+	bind 127.0.0.1
 	encode zstd gzip
 
 	route {
