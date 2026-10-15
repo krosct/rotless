@@ -6,9 +6,9 @@ name: Deploy
 # public address. The job uses the "production" environment, which requires a manual approval
 # (Settings > Environments), so nothing reaches the VPS without an explicit confirmation.
 #
-# The app settings are the server's .env (/srv/rotless/.env); this workflow sends none.
-# This repository is public, and so are its Actions logs: the VPS address and user are secrets
-# so they stay masked.
+# The app settings are sent from here (the "env" input below): each one is the secret or variable
+# DEPLOY_<NAME> of the "production" environment. This repository is public, and so are its Actions
+# logs: the VPS address and user are secrets so they stay masked.
 on:
     workflow_run:
         workflows: [CI]
@@ -53,10 +53,62 @@ jobs:
                   cache-dependency-path: frontend/package-lock.json
 
             - name: Deploy
-              uses: krosct/devkit@v1.1.0
+              uses: krosct/devkit@v1.2.0
               with:
                   host: ${{ secrets.DEPLOY_HOST }}
                   user: ${{ secrets.DEPLOY_USER }}
                   port: ${{ vars.DEPLOY_PORT || '22' }}
                   ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
                   known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+                  # One KEY=value per setting. Each replaces the server's; an unset one is removed
+                  # from the server's .env (Laravel uses its default). DB_PASSWORD is not sent: it
+                  # is generated on the first deploy and stays on the server (PRESERVE).
+                  env: |
+                      APP_NAME=${{ secrets.DEPLOY_APP_NAME || vars.DEPLOY_APP_NAME }}
+                      APP_ENV=${{ secrets.DEPLOY_APP_ENV || vars.DEPLOY_APP_ENV }}
+                      APP_KEY=${{ secrets.DEPLOY_APP_KEY || vars.DEPLOY_APP_KEY }}
+                      APP_DEBUG=${{ secrets.DEPLOY_APP_DEBUG || vars.DEPLOY_APP_DEBUG }}
+                      APP_URL=${{ secrets.DEPLOY_APP_URL || vars.DEPLOY_APP_URL }}
+                      APP_TIMEZONE=${{ secrets.DEPLOY_APP_TIMEZONE || vars.DEPLOY_APP_TIMEZONE }}
+                      APP_LOCALE=${{ secrets.DEPLOY_APP_LOCALE || vars.DEPLOY_APP_LOCALE }}
+                      APP_FALLBACK_LOCALE=${{ secrets.DEPLOY_APP_FALLBACK_LOCALE || vars.DEPLOY_APP_FALLBACK_LOCALE }}
+                      APP_FAKER_LOCALE=${{ secrets.DEPLOY_APP_FAKER_LOCALE || vars.DEPLOY_APP_FAKER_LOCALE }}
+                      APP_MAINTENANCE_DRIVER=${{ secrets.DEPLOY_APP_MAINTENANCE_DRIVER || vars.DEPLOY_APP_MAINTENANCE_DRIVER }}
+                      BCRYPT_ROUNDS=${{ secrets.DEPLOY_BCRYPT_ROUNDS || vars.DEPLOY_BCRYPT_ROUNDS }}
+                      LOG_CHANNEL=${{ secrets.DEPLOY_LOG_CHANNEL || vars.DEPLOY_LOG_CHANNEL }}
+                      LOG_STACK=${{ secrets.DEPLOY_LOG_STACK || vars.DEPLOY_LOG_STACK }}
+                      LOG_DEPRECATIONS_CHANNEL=${{ secrets.DEPLOY_LOG_DEPRECATIONS_CHANNEL || vars.DEPLOY_LOG_DEPRECATIONS_CHANNEL }}
+                      LOG_LEVEL=${{ secrets.DEPLOY_LOG_LEVEL || vars.DEPLOY_LOG_LEVEL }}
+                      DB_CONNECTION=${{ secrets.DEPLOY_DB_CONNECTION || vars.DEPLOY_DB_CONNECTION }}
+                      DB_HOST=${{ secrets.DEPLOY_DB_HOST || vars.DEPLOY_DB_HOST }}
+                      DB_PORT=${{ secrets.DEPLOY_DB_PORT || vars.DEPLOY_DB_PORT }}
+                      DB_DATABASE=${{ secrets.DEPLOY_DB_DATABASE || vars.DEPLOY_DB_DATABASE }}
+                      DB_USERNAME=${{ secrets.DEPLOY_DB_USERNAME || vars.DEPLOY_DB_USERNAME }}
+                      SESSION_DRIVER=${{ secrets.DEPLOY_SESSION_DRIVER || vars.DEPLOY_SESSION_DRIVER }}
+                      SESSION_LIFETIME=${{ secrets.DEPLOY_SESSION_LIFETIME || vars.DEPLOY_SESSION_LIFETIME }}
+                      SESSION_ENCRYPT=${{ secrets.DEPLOY_SESSION_ENCRYPT || vars.DEPLOY_SESSION_ENCRYPT }}
+                      SESSION_PATH=${{ secrets.DEPLOY_SESSION_PATH || vars.DEPLOY_SESSION_PATH }}
+                      SESSION_DOMAIN=${{ secrets.DEPLOY_SESSION_DOMAIN || vars.DEPLOY_SESSION_DOMAIN }}
+                      BROADCAST_CONNECTION=${{ secrets.DEPLOY_BROADCAST_CONNECTION || vars.DEPLOY_BROADCAST_CONNECTION }}
+                      FILESYSTEM_DISK=${{ secrets.DEPLOY_FILESYSTEM_DISK || vars.DEPLOY_FILESYSTEM_DISK }}
+                      QUEUE_CONNECTION=${{ secrets.DEPLOY_QUEUE_CONNECTION || vars.DEPLOY_QUEUE_CONNECTION }}
+                      CACHE_STORE=${{ secrets.DEPLOY_CACHE_STORE || vars.DEPLOY_CACHE_STORE }}
+                      MAIL_MAILER=${{ secrets.DEPLOY_MAIL_MAILER || vars.DEPLOY_MAIL_MAILER }}
+                      MAIL_SCHEME=${{ secrets.DEPLOY_MAIL_SCHEME || vars.DEPLOY_MAIL_SCHEME }}
+                      MAIL_HOST=${{ secrets.DEPLOY_MAIL_HOST || vars.DEPLOY_MAIL_HOST }}
+                      MAIL_PORT=${{ secrets.DEPLOY_MAIL_PORT || vars.DEPLOY_MAIL_PORT }}
+                      MAIL_USERNAME=${{ secrets.DEPLOY_MAIL_USERNAME || vars.DEPLOY_MAIL_USERNAME }}
+                      MAIL_PASSWORD=${{ secrets.DEPLOY_MAIL_PASSWORD || vars.DEPLOY_MAIL_PASSWORD }}
+                      MAIL_FROM_ADDRESS=${{ secrets.DEPLOY_MAIL_FROM_ADDRESS || vars.DEPLOY_MAIL_FROM_ADDRESS }}
+                      MAIL_FROM_NAME=${{ secrets.DEPLOY_MAIL_FROM_NAME || vars.DEPLOY_MAIL_FROM_NAME }}
+                      REGISTRATION_ENABLED=${{ secrets.DEPLOY_REGISTRATION_ENABLED || vars.DEPLOY_REGISTRATION_ENABLED }}
+                      OPENFOODFACTS_BASE_URL=${{ secrets.DEPLOY_OPENFOODFACTS_BASE_URL || vars.DEPLOY_OPENFOODFACTS_BASE_URL }}
+                      OPENFOODFACTS_TIMEOUT=${{ secrets.DEPLOY_OPENFOODFACTS_TIMEOUT || vars.DEPLOY_OPENFOODFACTS_TIMEOUT }}
+                      OPENFOODFACTS_ATTEMPTS=${{ secrets.DEPLOY_OPENFOODFACTS_ATTEMPTS || vars.DEPLOY_OPENFOODFACTS_ATTEMPTS }}
+                      OPENFOODFACTS_RETRY_DELAY=${{ secrets.DEPLOY_OPENFOODFACTS_RETRY_DELAY || vars.DEPLOY_OPENFOODFACTS_RETRY_DELAY }}
+                      OPENFOODFACTS_USER_AGENT=${{ secrets.DEPLOY_OPENFOODFACTS_USER_AGENT || vars.DEPLOY_OPENFOODFACTS_USER_AGENT }}
+                      TELEGRAM_BOT_TOKEN=${{ secrets.DEPLOY_TELEGRAM_BOT_TOKEN || vars.DEPLOY_TELEGRAM_BOT_TOKEN }}
+                      TELEGRAM_BOT_USERNAME=${{ secrets.DEPLOY_TELEGRAM_BOT_USERNAME || vars.DEPLOY_TELEGRAM_BOT_USERNAME }}
+                      TELEGRAM_WEBHOOK_SECRET=${{ secrets.DEPLOY_TELEGRAM_WEBHOOK_SECRET || vars.DEPLOY_TELEGRAM_WEBHOOK_SECRET }}
+                      TELEGRAM_CHAT_ID=${{ secrets.DEPLOY_TELEGRAM_CHAT_ID || vars.DEPLOY_TELEGRAM_CHAT_ID }}
+                      EXPIRY_WARNING_DAYS=${{ secrets.DEPLOY_EXPIRY_WARNING_DAYS || vars.DEPLOY_EXPIRY_WARNING_DAYS }}

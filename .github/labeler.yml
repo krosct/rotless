@@ -24,12 +24,9 @@
 "area: infra":
     - changed-files:
           - any-glob-to-any-file:
-                - Dockerfile
-                - .dockerignore
-                - docker/**
-                - docker-compose*.yml
-                - Caddyfile*
-                - scripts/**
+                - deploy.conf
+                - docker-compose.yml
+                - Caddyfile
                 - vite.config.js
 
 "area: ci":

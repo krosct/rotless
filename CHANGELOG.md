@@ -11,9 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Deploys go through devkit (`deploy.conf`), like the other apps on the VPS,
   which all sit behind one shared Caddy: rotless no longer owns port 443 nor
-  has its own deploy script. Each release has its image
-  (`rotless-app:<release>`), whose code it runs; `.env` and Laravel's storage
-  live outside the releases, in `/srv/rotless`.
+  has its own deploy script. `.env` and Laravel's storage live outside the
+  releases, in `/srv/rotless`.
+- The app runs on the system instead of in Docker: FrankenPHP (one static
+  binary with PHP 8.5, pinned and checksum verified) serves the API and the
+  SPA, next to the queue worker and the scheduler, as one user service. Only
+  PostgreSQL stays in Docker. The Dockerfile, the image builds and the
+  internal Caddy container are gone, and so is the old dev script: local
+  development is `deploy.sh local` (PostgreSQL in Docker, API and Vite on the
+  host).
+- The production settings come from the `production` environment on GitHub
+  (`env` input of the deploy workflow), like the other devkit apps; only the
+  database password stays on the server.
+- Laravel trusts `X-Forwarded-For` only from 127.0.0.1 (the shared Caddy).
 
 ### Added
 
