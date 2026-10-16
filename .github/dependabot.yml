@@ -1,0 +1,6 @@
+version: 2
+updates:
+  # GitHub Actions, devkit included (krosct/devkit@vX.Y.Z): checked daily, a pull request when a new version comes out.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: daily }
